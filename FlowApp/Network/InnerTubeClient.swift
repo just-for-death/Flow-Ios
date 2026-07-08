@@ -51,6 +51,17 @@ struct InnerTubeContext: Encodable {
             visitorData: visitorData
         ))
     }
+
+    static func tv(visitorData: String? = nil) -> InnerTubeContext {
+        InnerTubeContext(client: Client(
+            clientName: "TVHTML5",
+            clientVersion: "7.20230405.08.01",
+            hl: Locale.current.language.languageCode?.identifier ?? "en",
+            gl: Locale.current.region?.identifier ?? "US",
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36; SMART-TV; Tizen 4.0",
+            visitorData: visitorData
+        ))
+    }
 }
 
 // MARK: - InnerTubeClient
@@ -124,9 +135,8 @@ final class InnerTubeClient {
     // MARK: - Player (stream info)
     func fetchPlayerInfo(videoID: String) async throws -> PlayerResponse {
         let body: [String: Any] = [
-            "context": encodeContext(.android(visitorData: visitorData)),
-            "videoId": videoID,
-            "params":  "2AMBCgIQBg=="   // Android client param for better stream access
+            "context": encodeContext(.tv(visitorData: visitorData)),
+            "videoId": videoID
         ]
         let raw = try await post(to: InnerTubeEndpoints.player(), body: body)
         return try JSONDecoder().decode(PlayerResponse.self, from: raw)

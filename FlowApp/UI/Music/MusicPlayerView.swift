@@ -41,10 +41,12 @@ struct MusicHomeView: View {
 
     private func loadMusicFeed() async {
         isLoading = true
-        // Browse YouTube Music home (FEmusic_home)
-        if let data  = try? await InnerTubeClient.shared.browse(browseID: "FEmusic_home"),
-           let page  = try? HomeFeedPage(json: data) {
-            tracks   = page.videos
+        // Search for popular music as a fallback, since standard FEmusic_home uses different JSON schema
+        if let page = try? await InnerTubeClient.shared.search(query: "latest popular music videos") {
+            tracks = page.items.compactMap { item in
+                if case .video(let v) = item { return v }
+                return nil
+            }
         }
         isLoading = false
     }
