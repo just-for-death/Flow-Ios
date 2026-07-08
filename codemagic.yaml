@@ -1,0 +1,122 @@
+workflows:
+  ios-build:
+    name: Flow iOS — Debug Build
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "Flow.xcodeproj"
+        XCODE_SCHEME: "Flow"
+        BUNDLE_ID: "io.github.aedev.flow.ios"
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: develop
+          include: true
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate Xcode project
+        script: xcodegen generate --spec project.yml
+
+      - name: Install dependencies (SPM is resolved automatically by xcodebuild)
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -project Flow.xcodeproj \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Build for simulator (no signing needed)
+        script: |
+          xcodebuild build \
+            -project Flow.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+      - name: Run unit tests
+        script: |
+          xcodebuild test \
+            -project Flow.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
+
+  ios-release:
+    name: Flow iOS — Release / IPA
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_SCHEME: "Flow"
+        BUNDLE_ID: "io.github.aedev.flow.ios"
+      xcode: latest
+      # Set these secrets in Codemagic dashboard:
+      #   CERTIFICATE_PRIVATE_KEY   — p8 / p12 private key
+      #   CERTIFICATE_PUBLIC_DATA   — DER-encoded cert
+      #   PROVISIONING_PROFILE_DATA — base64 mobileprovision
+      #   APPLE_TEAM_ID
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"
+          include: true
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate Xcode project
+        script: xcodegen generate --spec project.yml
+
+      - name: Set team ID
+        script: |
+          sed -i '' "s/DEVELOPMENT_TEAM = \"\"/DEVELOPMENT_TEAM = \"$APPLE_TEAM_ID\"/g" \
+            Flow.xcodeproj/project.pbxproj
+
+      - name: Build & archive
+        script: |
+          xcodebuild archive \
+            -project Flow.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath build/Flow.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            | xcpretty --color
+
+      - name: Export IPA (ad-hoc for sideloading)
+        script: |
+          cat > /tmp/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/Flow.xcarchive \
+            -exportPath build/Flow \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            | xcpretty --color
+
+    artifacts:
+      - build/Flow/*.ipa
+      - build/Flow.xcarchive

@@ -1,0 +1,211 @@
+import SwiftUI
+
+// MARK: - SettingsView
+struct SettingsView: View {
+    @Environment(NeuroEngine.self)   private var neuro
+    @State private var showWipeAlert  = false
+    @State private var showSync       = false
+
+    // SponsorBlock
+    @State private var sbEnabled  = SponsorBlockService.shared.isEnabled
+    @State private var sbCats     = SponsorBlockService.shared.enabledCategories
+
+    // DeArrow
+    @State private var daEnabled  = DeArrowService.shared.isEnabled
+
+    // RYD
+    @State private var rydEnabled = RYDService.shared.isEnabled
+
+    // Player
+    @AppStorage("prefQuality")    var prefQuality:    String = "1080p"
+    @AppStorage("autoplay")       var autoplay:       Bool   = true
+    @AppStorage("resumePlayback") var resumePlayback: Bool   = true
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // MARK: Playback
+                Section("Playback") {
+                    Picker("Preferred Quality", selection: $prefQuality) {
+                        ForEach(["2160p", "1440p", "1080p", "720p", "480p", "360p"], id: \.self) {
+                            Text($0).tag($0)
+                        }
+                    }
+                    Toggle("Autoplay Next Video", isOn: $autoplay)
+                    Toggle("Resume Where You Left Off", isOn: $resumePlayback)
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: Flow Sync
+                Section {
+                    Button {
+                        showSync = true
+                    } label: {
+                        HStack {
+                            Label("Sync Devices", systemImage: "iphone.and.arrow.forward")
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                .font(.footnote.weight(.semibold))
+                        }
+                    }
+                } header: {
+                    Text("Flow Sync")
+                } footer: {
+                    Text("Sync watch history, playlists, and FlowNeuro data across your devices over local Wi-Fi.")
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: SponsorBlock
+                Section {
+                    Toggle("Enable SponsorBlock", isOn: $sbEnabled)
+                        .onChange(of: sbEnabled) { _, v in SponsorBlockService.shared.isEnabled = v }
+                    if sbEnabled {
+                        ForEach(SponsorCategory.allCases, id: \.self) { cat in
+                            Toggle(cat.displayName, isOn: Binding(
+                                get: { sbCats.contains(cat) },
+                                set: { on in
+                                    if on { sbCats.insert(cat) } else { sbCats.remove(cat) }
+                                    SponsorBlockService.shared.enabledCategories = sbCats
+                                }
+                            ))
+                            .font(FlowTheme.Type.bodyMedium)
+                        }
+                    }
+                } header: {
+                    Text("SponsorBlock")
+                } footer: {
+                    Text("Community-powered sponsor and self-promotion skip.")
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: DeArrow
+                Section("DeArrow") {
+                    Toggle("Replace clickbait titles & thumbnails", isOn: $daEnabled)
+                        .onChange(of: daEnabled) { _, v in DeArrowService.shared.isEnabled = v }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: Return YouTube Dislike
+                Section("Return YouTube Dislike") {
+                    Toggle("Show dislike counts", isOn: $rydEnabled)
+                        .onChange(of: rydEnabled) { _, v in RYDService.shared.isEnabled = v }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: FlowNeuro
+                Section {
+                    NavigationLink("Recommendation Dashboard") {
+                        NeuroDashboardView()
+                    }
+                    Button("Wipe All Recommendations", role: .destructive) {
+                        showWipeAlert = true
+                    }
+                } header: {
+                    Text("FlowNeuro Engine")
+                } footer: {
+                    Text("Your recommendation data stays 100% on this device.")
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                // MARK: About
+                Section("About") {
+                    LabeledContent("Version", value: "1.0.0")
+                    LabeledContent("Platform", value: "iOS")
+                    Link("Source Code on GitHub",
+                         destination: URL(string: "https://github.com/A-EDev/Flow")!)
+                        .foregroundStyle(FlowTheme.Colors.primary)
+                    Link("License (GPL v3)",
+                         destination: URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!)
+                        .foregroundStyle(FlowTheme.Colors.primary)
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+            }
+            .scrollContentBackground(.hidden)
+            .background(FlowTheme.Colors.background)
+            .navigationTitle("Settings")
+            .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
+            .preferredColorScheme(.dark)
+            .alert("Wipe Recommendation Data?", isPresented: $showWipeAlert) {
+                Button("Wipe", role: .destructive) { neuro.resetBrain() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete your watching patterns and topic scores. Flow will start learning fresh.")
+            }
+            .fullScreenCover(isPresented: $showSync) {
+                SyncView()
+            }
+        }
+    }
+}
+
+// MARK: - Neuro Dashboard
+struct NeuroDashboardView: View {
+    @Environment(NeuroEngine.self) private var neuro
+
+    var body: some View {
+        List {
+            Section("Current Persona") {
+                let persona = neuro.currentPersona()
+                HStack(spacing: FlowTheme.Spacing.md) {
+                    Text(persona.icon)
+                        .font(.system(size: 48))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(persona.title)
+                            .font(FlowTheme.Type.titleMedium)
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                        Text(persona.rawValue.capitalized)
+                            .font(FlowTheme.Type.bodySmall)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                    }
+                }
+                .padding(.vertical, FlowTheme.Spacing.xs)
+            }
+            .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+            Section("Top Interests") {
+                let sortedTopics = neuro.brain.globalVector.topics.sorted { $0.value > $1.value }.prefix(20)
+                let maxScore = sortedTopics.first?.value ?? 1.0
+
+                ForEach(sortedTopics, id: \.key) { kv in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(kv.key.capitalized)
+                                .font(FlowTheme.Type.bodyMedium)
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            Spacer()
+                            Text(String(format: "%.2f", kv.value))
+                                .font(FlowTheme.Type.labelSmall)
+                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        }
+                        // Interest bar
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(FlowTheme.Colors.outlineVariant).frame(height: 4)
+                                Capsule()
+                                    .fill(FlowTheme.Colors.primary)
+                                    .frame(width: geo.size.width * min(1, max(0, kv.value / maxScore)), height: 4)
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+                    .padding(.vertical, FlowTheme.Spacing.xs)
+                }
+            }
+            .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+            Section("Stats") {
+                LabeledContent("Videos tracked", value: "\(neuro.brain.totalInteractions)")
+                LabeledContent("Watch history",  value: "\(neuro.brain.watchHistoryMap.count)")
+                LabeledContent("Topics learned", value: "\(neuro.brain.globalVector.topics.count)")
+            }
+            .listRowBackground(FlowTheme.Colors.surfaceVariant)
+        }
+        .scrollContentBackground(.hidden)
+        .background(FlowTheme.Colors.background)
+        .navigationTitle("FlowNeuro")
+        .preferredColorScheme(.dark)
+    }
+}
+
