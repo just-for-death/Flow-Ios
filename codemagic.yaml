@@ -120,3 +120,49 @@ workflows:
     artifacts:
       - build/Flow/*.ipa
       - build/Flow.xcarchive
+
+  ios-unsigned-ipa:
+    name: Flow iOS — Unsigned IPA (TrollStore/AltStore)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_SCHEME: "Flow"
+        BUNDLE_ID: "io.github.aedev.flow.ios"
+      xcode: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate Xcode project
+        script: xcodegen generate --spec project.yml
+
+      - name: Build Unsigned App
+        script: |
+          xcodebuild clean build \
+            -project Flow.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_IDENTITY="" \
+            ENTITLEMENTS_REQUIRED=NO \
+            CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
+            | xcpretty --color
+
+      - name: Package IPA
+        script: |
+          mkdir -p build/Payload
+          mv build/Release-iphoneos/Flow.app build/Payload/
+          cd build
+          zip -r Flow.ipa Payload
+          cd ..
+
+    artifacts:
+      - build/Flow.ipa
