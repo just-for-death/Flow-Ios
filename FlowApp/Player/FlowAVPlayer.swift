@@ -88,11 +88,17 @@ final class FlowAVPlayer: NSObject {
                 streamInfo = stream
                 duration   = stream.duration
 
-                // Prefer separate audio+video (DASH) if available
-                let playURL = stream.videoURL ?? stream.fallbackURL
-                guard let url = playURL else { throw InnerTubeError.noStreamsAvailable }
+                let item: AVPlayerItem
+                
+                // Attempt to merge DASH video + audio into a single AVMutableComposition
+                if let vURL = stream.videoURL, let aURL = stream.audioURL {
+                    item = try await createDASHPlayerItem(videoURL: vURL, audioURL: aURL)
+                } else if let fallback = stream.fallbackURL {
+                    item = AVPlayerItem(url: fallback)
+                } else {
+                    throw InnerTubeError.noStreamsAvailable
+                }
 
-                let item = AVPlayerItem(url: url)
                 player.replaceCurrentItem(with: item)
                 observePlayerItem(item)
                 player.playImmediately(atRate: playbackRate)
@@ -108,6 +114,34 @@ final class FlowAVPlayer: NSObject {
                 self.isLoading = false
             }
         }
+    }
+    
+    private func createDASHPlayerItem(videoURL: URL, audioURL: URL) async throws -> AVPlayerItem {
+        let composition = AVMutableComposition()
+        
+        let videoAsset = AVURLAsset(url: videoURL)
+        let audioAsset = AVURLAsset(url: audioURL)
+        
+        guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+              let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first else {
+            throw InnerTubeError.noStreamsAvailable
+        }
+        
+        guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw InnerTubeError.noStreamsAvailable
+        }
+        
+        let vDuration = try await videoAsset.load(.duration)
+        let aDuration = try await audioAsset.load(.duration)
+        let duration = CMTimeMinimum(vDuration, aDuration) // Prevent desync at the end
+        
+        let timeRange = CMTimeRange(start: .zero, duration: duration)
+        
+        try compVideoTrack.insertTimeRange(timeRange, of: videoTrack, at: .zero)
+        try compAudioTrack.insertTimeRange(timeRange, of: audioTrack, at: .zero)
+        
+        return AVPlayerItem(asset: composition)
     }
 
     func pause() {
