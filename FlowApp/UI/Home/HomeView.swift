@@ -71,9 +71,11 @@ struct HomeView: View {
         }
     }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     private var videoGrid: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 160, maximum: 320))],
+            columns: [GridItem(.adaptive(minimum: sizeClass == .regular ? 280 : 160, maximum: 360))],
             spacing: FlowTheme.Spacing.sm
         ) {
             ForEach(vm.videos) { video in
@@ -92,7 +94,7 @@ struct HomeView: View {
     }
 
     private var loadingGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 320))], spacing: FlowTheme.Spacing.sm) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: sizeClass == .regular ? 280 : 160, maximum: 360))], spacing: FlowTheme.Spacing.sm) {
             ForEach(0..<8, id: \.self) { _ in VideoCardSkeleton() }
         }
         .padding(FlowTheme.Spacing.sm)

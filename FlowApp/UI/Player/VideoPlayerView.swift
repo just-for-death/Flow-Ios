@@ -19,50 +19,74 @@ struct VideoPlayerView: View {
     @GestureState private var dragOffset = CGSize.zero
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                Color.black.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Video surface
-                PlayerSurface()
-                    .aspectRatio(16/9, contentMode: .fit)
-                    .background(Color.black)
-                    .overlay(controlsOverlay)
-                    .onTapGesture { toggleControls() }
-                    .gesture(
-                        DragGesture()
-                            .onEnded { val in
-                                if val.translation.height > 100 { onDismiss() }
-                            }
-                    )
+                let isLandscapePad = geo.size.width > geo.size.height && UIDevice.current.userInterfaceIdiom == .pad
 
-                if !isFullscreen {
-                    // Bottom panel
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: FlowTheme.Spacing.md) {
-                            videoInfo
-                            Divider().background(FlowTheme.Colors.outline)
-                            if showRelated { relatedSection }
+                if isLandscapePad && !isFullscreen {
+                    HStack(spacing: 0) {
+                        // Video surface on left
+                        VStack {
+                            Spacer()
+                            videoSurface
+                            Spacer()
                         }
-                        .padding(FlowTheme.Spacing.md)
+                        .frame(width: geo.size.width * 0.65)
+                        .background(Color.black)
+
+                        // Info panel on right
+                        bottomPanel
+                            .frame(width: geo.size.width * 0.35)
                     }
-                    .background(FlowTheme.Colors.background)
+                } else {
+                    VStack(spacing: 0) {
+                        videoSurface
+                        if !isFullscreen { bottomPanel }
+                    }
+                }
+            }
+            .preferredColorScheme(.dark)
+            .ignoresSafeArea(edges: isFullscreen ? .all : [])
+            .task(id: player.currentVideo?.id) {
+                await loadRelated()
+                await loadExtras()
+            }
+            .onDisappear {
+                // Record watch completion to NeuroEngine
+                if let video = player.currentVideo, player.duration > 0 {
+                    let fraction = player.currentTime / player.duration
+                    neuro.onVideoInteraction(video: video, interaction: .watched(Float(fraction)))
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .ignoresSafeArea(edges: isFullscreen ? .all : [])
-        .task(id: player.currentVideo?.id) {
-            await loadRelated()
-            await loadExtras()
-        }
-        .onDisappear {
-            // Record watch completion to NeuroEngine
-            if let video = player.currentVideo, player.duration > 0 {
-                let fraction = player.currentTime / player.duration
-                neuro.onVideoInteraction(video: video, interaction: .watched(Float(fraction)))
+    }
+
+    private var videoSurface: some View {
+        PlayerSurface()
+            .aspectRatio(16/9, contentMode: .fit)
+            .background(Color.black)
+            .overlay(controlsOverlay)
+            .onTapGesture { toggleControls() }
+            .gesture(
+                DragGesture()
+                    .onEnded { val in
+                        if val.translation.height > 100 { onDismiss() }
+                    }
+            )
+    }
+
+    private var bottomPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.md) {
+                videoInfo
+                Divider().background(FlowTheme.Colors.outline)
+                if showRelated { relatedSection }
             }
+            .padding(FlowTheme.Spacing.md)
         }
+        .background(FlowTheme.Colors.background)
     }
 
     // MARK: - Video controls overlay

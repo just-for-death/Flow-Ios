@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - ContentView (tab bar root)
 struct ContentView: View {
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(FlowAVPlayer.self) private var player
     @State private var selectedTab: Tab = .home
     @State private var showingPlayer = false
@@ -16,28 +17,36 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main content
-            Group {
-                switch selectedTab {
-                case .home:     HomeView()
-                case .search:   SearchView()
-                case .music:    MusicHomeView()
-                case .library:  LibraryView()
-                case .settings: SettingsView()
+        Group {
+            if sizeClass == .regular {
+                // iPad Sidebar Layout
+                HStack(spacing: 0) {
+                    FlowTabBar(selected: $selectedTab, isSidebar: true)
+                    
+                    ZStack(alignment: .bottom) {
+                        mainContent
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                        if player.currentVideo != nil && !showingPlayer {
+                            MiniPlayerBar(onTap: { showingPlayer = true })
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // iPhone Bottom Bar Layout
+                ZStack(alignment: .bottom) {
+                    mainContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Mini player bar (visible whenever something is loaded)
-            VStack(spacing: 0) {
-                if player.currentVideo != nil && !showingPlayer {
-                    MiniPlayerBar(onTap: { showingPlayer = true })
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    VStack(spacing: 0) {
+                        if player.currentVideo != nil && !showingPlayer {
+                            MiniPlayerBar(onTap: { showingPlayer = true })
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        FlowTabBar(selected: $selectedTab, isSidebar: false)
+                    }
                 }
-
-                // Custom tab bar
-                FlowTabBar(selected: $selectedTab)
             }
         }
         .background(FlowTheme.Colors.background.ignoresSafeArea())
@@ -46,28 +55,62 @@ struct ContentView: View {
         }
         .animation(FlowTheme.Animation.standard, value: player.currentVideo?.id)
     }
+
+    private var mainContent: some View {
+        Group {
+            switch selectedTab {
+            case .home:     HomeView()
+            case .search:   SearchView()
+            case .music:    MusicHomeView()
+            case .library:  LibraryView()
+            case .settings: SettingsView()
+            }
+        }
+    }
 }
 
 // MARK: - FlowTabBar
 struct FlowTabBar: View {
     @Binding var selected: ContentView.Tab
+    let isSidebar: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(ContentView.Tab.allCases, id: \.self) { tab in
-                TabBarButton(tab: tab, isSelected: selected == tab) {
-                    withAnimation(FlowTheme.Animation.standard) { selected = tab }
+        if isSidebar {
+            VStack(spacing: FlowTheme.Spacing.xl) {
+                ForEach(ContentView.Tab.allCases, id: \.self) { tab in
+                    TabBarButton(tab: tab, isSelected: selected == tab) {
+                        withAnimation(FlowTheme.Animation.standard) { selected = tab }
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal, FlowTheme.Spacing.md)
+            .padding(.top, FlowTheme.Spacing.xl * 2)
+            .frame(width: 80)
+            .background(
+                FlowTheme.Colors.surfaceVariant
+                    .ignoresSafeArea()
+            )
+            .overlay(alignment: .trailing) {
+                Rectangle().fill(FlowTheme.Colors.outline).frame(width: 0.5).ignoresSafeArea()
+            }
+        } else {
+            HStack(spacing: 0) {
+                ForEach(ContentView.Tab.allCases, id: \.self) { tab in
+                    TabBarButton(tab: tab, isSelected: selected == tab) {
+                        withAnimation(FlowTheme.Animation.standard) { selected = tab }
+                    }
                 }
             }
-        }
-        .padding(.horizontal, FlowTheme.Spacing.md)
-        .padding(.vertical, FlowTheme.Spacing.sm)
-        .background(
-            FlowTheme.Colors.surfaceVariant
-                .overlay(FlowTheme.Colors.outline.opacity(0.3), in: Rectangle().inset(by: -0.5))
-        )
-        .overlay(alignment: .top) {
-            Rectangle().fill(FlowTheme.Colors.outline).frame(height: 0.5)
+            .padding(.horizontal, FlowTheme.Spacing.md)
+            .padding(.vertical, FlowTheme.Spacing.sm)
+            .background(
+                FlowTheme.Colors.surfaceVariant
+                    .overlay(FlowTheme.Colors.outline.opacity(0.3), in: Rectangle().inset(by: -0.5))
+            )
+            .overlay(alignment: .top) {
+                Rectangle().fill(FlowTheme.Colors.outline).frame(height: 0.5)
+            }
         }
     }
 }

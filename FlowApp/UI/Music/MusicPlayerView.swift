@@ -23,6 +23,8 @@ struct MusicHomeView: View {
                     }
                 }
                 .padding(.top, FlowTheme.Spacing.sm)
+                .frame(maxWidth: 800)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(FlowTheme.Colors.background)
             .navigationTitle("Music")
