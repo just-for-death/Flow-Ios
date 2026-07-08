@@ -52,6 +52,21 @@ struct InnerTubeContext: Encodable {
         ))
     }
 
+    static func ios(visitorData: String? = nil) -> InnerTubeContext {
+        InnerTubeContext(client: Client(
+            clientName: "IOS",
+            clientVersion: "21.03.3",
+            hl: Locale.current.language.languageCode?.identifier ?? "en",
+            gl: Locale.current.region?.identifier ?? "US",
+            userAgent: "com.google.ios.youtube/21.03.3 (iPad7,6; U; CPU iPadOS 17_7_10 like Mac OS X; en-US)",
+            visitorData: visitorData,
+            osName: "iPadOS",
+            osVersion: "17.7.10.21H450",
+            deviceMake: "Apple",
+            deviceModel: "iPad7,6"
+        ))
+    }
+
     static func tv(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "TVHTML5",

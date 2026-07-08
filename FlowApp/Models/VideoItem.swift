@@ -272,6 +272,7 @@ struct PlayerResponse: Decodable {
         struct Format: Decodable, Identifiable {
             let itag: Int
             let url: String?
+            let signatureCipher: String?
             let mimeType: String?
             let qualityLabel: String?
             let bitrate: Int?
