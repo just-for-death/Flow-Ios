@@ -188,13 +188,15 @@ struct SearchPage {
                            let video = VideoItem(videoRenderer: vr) {
                             items.append(.video(video))
                         } else if let cr = item["channelRenderer"] as? [String: Any],
-                          let channel = ChannelItem(channelRenderer: cr) {
-                    items.append(.channel(channel))
+                                  let channel = ChannelItem(channelRenderer: cr) {
+                            items.append(.channel(channel))
+                        }
+                    }
                 }
             }
         }
         self.results = items
-        self.continuation = nil // simplified; add continuation parsing if needed
+        self.continuation = nil
     }
 }
 
