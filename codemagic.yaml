@@ -144,6 +144,7 @@ workflows:
 
       - name: Build Unsigned App
         script: |
+          set -eo pipefail
           xcodebuild clean build \
             -project Flow.xcodeproj \
             -scheme "$XCODE_SCHEME" \

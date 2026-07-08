@@ -38,6 +38,10 @@ struct CanonicalLikeMeta: Codable {
 }
 
 struct CanonicalLike: Codable {
+    static let KIND_VIDEO = "video"
+    static let KIND_MUSIC = "music"
+    static let STATE_LIKED = "liked"
+    
     var kind: String
     var id: String
     var state: String
