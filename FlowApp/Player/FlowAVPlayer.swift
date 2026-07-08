@@ -56,7 +56,8 @@ final class FlowAVPlayer: NSObject {
             if let url = localURL {
                 // Local playback
                 let item = AVPlayerItem(url: url)
-                self.duration = item.asset.duration.seconds // Fallback duration
+                let loadedDuration = (try? await item.asset.load(.duration).seconds) ?? 0.0
+                self.duration = loadedDuration // Fallback duration
                 self.player.replaceCurrentItem(with: item)
                 self.observePlayerItem(item)
                 self.player.playImmediately(atRate: self.playbackRate)
@@ -69,7 +70,7 @@ final class FlowAVPlayer: NSObject {
                     audioURL: nil,
                     fallbackURL: url,
                     formats: [],
-                    duration: Double(video.duration ?? Int(item.asset.duration.seconds)),
+                    duration: Double(video.duration ?? Int(loadedDuration)),
                     title: video.title,
                     channelName: video.channelName,
                     thumbnailURL: video.thumbnailURL
