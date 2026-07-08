@@ -43,7 +43,7 @@ struct MusicHomeView: View {
         isLoading = true
         // Search for popular music as a fallback, since standard FEmusic_home uses different JSON schema
         if let page = try? await InnerTubeClient.shared.search(query: "latest popular music videos") {
-            tracks = page.items.compactMap { item in
+            tracks = page.results.compactMap { item in
                 if case .video(let v) = item { return v }
                 return nil
             }

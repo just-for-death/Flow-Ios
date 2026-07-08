@@ -28,6 +28,10 @@ struct InnerTubeContext: Encodable {
         let gl: String
         let userAgent: String?
         let visitorData: String?
+        var osName: String?
+        var osVersion: String?
+        var deviceMake: String?
+        var deviceModel: String?
     }
 
     static func web(visitorData: String? = nil) -> InnerTubeContext {

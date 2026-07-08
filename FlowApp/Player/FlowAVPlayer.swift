@@ -116,6 +116,7 @@ final class FlowAVPlayer: NSObject {
         }
     }
     
+    @MainActor
     private func createDASHPlayerItem(videoURL: URL, audioURL: URL) async throws -> AVPlayerItem {
         let composition = AVMutableComposition()
         
@@ -147,6 +148,13 @@ final class FlowAVPlayer: NSObject {
     func pause() {
         player.pause()
         isPlaying = false
+    }
+
+    func stop() {
+        pause()
+        currentVideo = nil
+        streamInfo = nil
+        player.replaceCurrentItem(with: nil)
     }
 
     func resume() {
