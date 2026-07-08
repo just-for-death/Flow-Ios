@@ -60,7 +60,7 @@ struct VideoPlayerView: View {
             // Record watch completion to NeuroEngine
             if let video = player.currentVideo, player.duration > 0 {
                 let fraction = player.currentTime / player.duration
-                neuro.onVideoInteraction(video: video, interaction: .watch, percentWatched: Float(fraction))
+                neuro.onVideoInteraction(video: video, interaction: .watched(Float(fraction)))
             }
         }
     }

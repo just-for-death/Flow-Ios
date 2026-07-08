@@ -197,8 +197,8 @@ struct NextPage {
             throw InnerTubeError.parseError("NextPage: invalid JSON")
         }
         var items: [VideoItem] = []
-        let secRes1 = raw["secondaryResults"]?.dict
-        let secRes2 = secRes1?["secondaryResults"]?.dict
+        let secRes1 = raw["secondaryResults"] as? [String: Any]
+        let secRes2 = secRes1?["secondaryResults"] as? [String: Any]
         let results = secRes2?["results"] as? [[String: Any]] ?? []
         for result in results {
             if let cvr = result["compactVideoRenderer"] as? [String: Any],
@@ -326,8 +326,8 @@ extension VideoItem {
         let ownerText = vr["ownerText"] as? [String: Any]
         let runs = ownerText?["runs"] as? [[String: Any]]
         let firstRun = runs?.first
-        let nav = firstRun?["navigationEndpoint"]?.dict
-        let browse = nav?["browseEndpoint"]?.dict
+        let nav = firstRun?["navigationEndpoint"] as? [String: Any]
+        let browse = nav?["browseEndpoint"] as? [String: Any]
         self.channelID = browse?["browseId"] as? String ?? ""
         let thumbs = (vr["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]] ?? []
         self.thumbnailURL = thumbs.last.flatMap { $0["url"] as? String }.flatMap(URL.init)
