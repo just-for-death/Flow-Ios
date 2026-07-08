@@ -143,7 +143,6 @@ struct MiniPlayerBar: View {
 
     var body: some View {
         HStack(spacing: FlowTheme.Spacing.sm) {
-            // Thumbnail
             if let url = player.currentVideo?.thumbnailURL {
                 AsyncImage(url: url) { img in
                     img.resizable().aspectRatio(16/9, contentMode: .fill)
@@ -154,7 +153,6 @@ struct MiniPlayerBar: View {
                 .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
             }
 
-            // Title + channel
             VStack(alignment: .leading, spacing: 2) {
                 Text(player.currentVideo?.title ?? "")
                     .font(FlowTheme.Typography.bodyMedium)
@@ -168,32 +166,24 @@ struct MiniPlayerBar: View {
 
             Spacer()
 
-            // Controls
             HStack(spacing: FlowTheme.Spacing.sm) {
-                Button {
-                    player.togglePlayPause()
-                } label: {
+                Button { player.togglePlayPause() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(FlowTheme.Colors.onSurface)
-                }
-                .buttonStyle(.plain)
+                }.buttonStyle(.plain)
 
-                Button {
-                    player.pause()
-                } label: {
+                Button { player.stop() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 16))
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                }
-                .buttonStyle(.plain)
+                }.buttonStyle(.plain)
             }
         }
         .padding(.horizontal, FlowTheme.Spacing.md)
         .padding(.vertical, FlowTheme.Spacing.sm)
-        .background(FlowTheme.Colors.surfaceVariant)
-        .overlay(alignment: .top) {
-            // Progress line
+        .flowCard()
+        .overlay(alignment: .bottom) {
             GeometryReader { geo in
                 Rectangle()
                     .fill(FlowTheme.Colors.primary)
@@ -201,7 +191,22 @@ struct MiniPlayerBar: View {
                     .frame(height: 2)
             }
             .frame(height: 2)
+            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
         }
+        .padding(.horizontal, FlowTheme.Spacing.sm)
+        .padding(.bottom, FlowTheme.Spacing.xs)
         .onTapGesture(perform: onTap)
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.height < -20 {
+                        // Swipe up: expand
+                        onTap()
+                    } else if value.translation.height > 20 {
+                        // Swipe down: close
+                        player.stop()
+                    }
+                }
+        )
     }
 }
