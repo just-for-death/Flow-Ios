@@ -130,29 +130,37 @@ struct HomeFeedPage {
         guard let raw = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else {
             throw InnerTubeError.parseError("HomeFeedPage: invalid JSON")
         }
-        // Walk: contents → twoColumnBrowseResultsRenderer → tabs[0] → tabRenderer
-        //       → content → richGridRenderer → contents → richItemRenderer → content → videoRenderer
         var items: [VideoItem] = []
-        let rawContents = raw["contents"] as? [String: Any]
-        let twoCol = rawContents?["twoColumnBrowseResultsRenderer"]?.dict
-        let tabs = twoCol?["tabs"] as? [[String: Any]] ?? []
-        
-        let firstTab = tabs.first?.dict
-        let tabRenderer = firstTab?["tabRenderer"]?.dict
-        let content = tabRenderer?["content"]?.dict
-        let richGrid = content?["richGridRenderer"]?.dict
-        let richContents = richGrid?["contents"] as? [[String: Any]] ?? []
+        if let rawContents = raw["contents"] as? [String: Any],
+           let twoCol = rawContents["twoColumnBrowseResultsRenderer"] as? [String: Any],
+           let tabs = twoCol["tabs"] as? [[String: Any]],
+           let firstTab = tabs.first,
+           let tabRenderer = firstTab["tabRenderer"] as? [String: Any],
+           let content = tabRenderer["content"] as? [String: Any],
+           let richGrid = content["richGridRenderer"] as? [String: Any],
+           let richContents = richGrid["contents"] as? [[String: Any]] {
 
-        for entry in richContents {
-            let richItem = entry["richItemRenderer"]?.dict
-            let itemContent = richItem?["content"]?.dict
-            if let vr = itemContent?["videoRenderer"] as? [String: Any] {
-                if let item = VideoItem(videoRenderer: vr) { items.append(item) }
+            for entry in richContents {
+                if let richItem = entry["richItemRenderer"] as? [String: Any],
+                   let itemContent = richItem["content"] as? [String: Any],
+                   let vr = itemContent["videoRenderer"] as? [String: Any] {
+                    if let item = VideoItem(videoRenderer: vr) { items.append(item) }
+                }
             }
+            
+            if let lastRichContent = richContents.last,
+               let contItem = lastRichContent["continuationItemRenderer"] as? [String: Any],
+               let contEndpoint = contItem["continuationEndpoint"] as? [String: Any],
+               let contCommand = contEndpoint["continuationCommand"] as? [String: Any],
+               let token = contCommand["token"] as? String {
+                self.continuation = token
+            } else {
+                self.continuation = nil
+            }
+        } else {
+            self.continuation = nil
         }
         self.videos = items
-        self.continuation = richContents.last?["continuationItemRenderer"]?.dict?
-            ["continuationEndpoint"]?.dict?["continuationCommand"]?.dict?["token"] as? String
     }
 }
 
@@ -165,19 +173,21 @@ struct SearchPage {
             throw InnerTubeError.parseError("SearchPage: invalid JSON")
         }
         var items: [SearchResultItem] = []
-        let twoCol = raw["contents"]?.dict?["twoColumnSearchResultsRenderer"]?.dict
-        let primary = twoCol?["primaryContents"]?.dict
-        let secList = primary?["sectionListRenderer"]?.dict
-        let contents = secList?["contents"] as? [[String: Any]] ?? []
-
-        for section in contents {
-            let itemSectionDict = section["itemSectionRenderer"]?.dict
-            let itemSection = itemSectionDict?["contents"] as? [[String: Any]] ?? []
-            for item in itemSection {
-                if let vr = item["videoRenderer"] as? [String: Any],
-                   let video = VideoItem(videoRenderer: vr) {
-                    items.append(.video(video))
-                } else if let cr = item["channelRenderer"] as? [String: Any],
+        
+        if let rawContents = raw["contents"] as? [String: Any],
+           let twoCol = rawContents["twoColumnSearchResultsRenderer"] as? [String: Any],
+           let primary = twoCol["primaryContents"] as? [String: Any],
+           let secList = primary["sectionListRenderer"] as? [String: Any],
+           let contents = secList["contents"] as? [[String: Any]] {
+           
+            for section in contents {
+                if let itemSectionDict = section["itemSectionRenderer"] as? [String: Any],
+                   let itemSection = itemSectionDict["contents"] as? [[String: Any]] {
+                    for item in itemSection {
+                        if let vr = item["videoRenderer"] as? [String: Any],
+                           let video = VideoItem(videoRenderer: vr) {
+                            items.append(.video(video))
+                        } else if let cr = item["channelRenderer"] as? [String: Any],
                           let channel = ChannelItem(channelRenderer: cr) {
                     items.append(.channel(channel))
                 }
@@ -197,13 +207,16 @@ struct NextPage {
             throw InnerTubeError.parseError("NextPage: invalid JSON")
         }
         var items: [VideoItem] = []
-        let secRes1 = raw["secondaryResults"] as? [String: Any]
-        let secRes2 = secRes1?["secondaryResults"] as? [String: Any]
-        let results = secRes2?["results"] as? [[String: Any]] ?? []
-        for result in results {
-            if let cvr = result["compactVideoRenderer"] as? [String: Any],
-               let video = VideoItem(compactVideoRenderer: cvr) {
-                items.append(video)
+        
+        if let secRes1 = raw["secondaryResults"] as? [String: Any],
+           let secRes2 = secRes1["secondaryResults"] as? [String: Any],
+           let results = secRes2["results"] as? [[String: Any]] {
+           
+            for result in results {
+                if let cvr = result["compactVideoRenderer"] as? [String: Any],
+                   let video = VideoItem(compactVideoRenderer: cvr) {
+                    items.append(video)
+                }
             }
         }
         self.relatedVideos = items
@@ -320,65 +333,136 @@ struct PlayerResponse: Decodable {
 extension VideoItem {
     init?(videoRenderer vr: [String: Any]) {
         guard let id = vr["videoId"] as? String else { return nil }
-        self.id          = id
-        self.title       = (vr["title"] as? [String: Any])?["runs"] .asRuns ?? ""
-        self.channelName = (vr["ownerText"] as? [String: Any])?["runs"].asRuns ?? ""
-        let ownerText = vr["ownerText"] as? [String: Any]
-        let runs = ownerText?["runs"] as? [[String: Any]]
-        let firstRun = runs?.first
-        let nav = firstRun?["navigationEndpoint"] as? [String: Any]
-        let browse = nav?["browseEndpoint"] as? [String: Any]
-        self.channelID = browse?["browseId"] as? String ?? ""
-        let thumbs = (vr["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]] ?? []
-        self.thumbnailURL = thumbs.last.flatMap { $0["url"] as? String }.flatMap(URL.init)
-        self.duration     = (vr["lengthText"] as? [String: Any])?["simpleText"].flatMap { ($0 as? String)?.durationSeconds }
-        self.viewCount    = (vr["viewCountText"] as? [String: Any])?["simpleText"] as? String
-        self.publishedAt  = (vr["publishedTimeText"] as? [String: Any])?["simpleText"] as? String
-        self.isLive       = vr["badges"] != nil && ((vr["badges"] as? [[String: Any]])?.contains { $0.description.contains("LIVE") } == true)
+        self.id = id
+        
+        self.title = ""
+        if let titleDict = vr["title"] as? [String: Any],
+           let runs = titleDict["runs"] as? [[String: Any]] {
+            self.title = runs.compactMap { $0["text"] as? String }.joined()
+        }
+        
+        self.channelName = ""
+        self.channelID = ""
+        if let ownerText = vr["ownerText"] as? [String: Any],
+           let runs = ownerText["runs"] as? [[String: Any]] {
+            self.channelName = runs.compactMap { $0["text"] as? String }.joined()
+            
+            if let firstRun = runs.first,
+               let nav = firstRun["navigationEndpoint"] as? [String: Any],
+               let browse = nav["browseEndpoint"] as? [String: Any],
+               let browseId = browse["browseId"] as? String {
+                self.channelID = browseId
+            }
+        }
+        
+        var thumbnailURL: URL? = nil
+        if let thumbDict = vr["thumbnail"] as? [String: Any],
+           let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
+           let lastThumb = thumbnails.last,
+           let urlString = lastThumb["url"] as? String {
+            thumbnailURL = URL(string: urlString)
+        }
+        self.thumbnailURL = thumbnailURL
+        
+        self.duration = nil
+        if let lengthDict = vr["lengthText"] as? [String: Any],
+           let simpleText = lengthDict["simpleText"] as? String {
+            self.duration = simpleText.durationSeconds
+        }
+        
+        self.viewCount = nil
+        if let viewDict = vr["viewCountText"] as? [String: Any],
+           let simpleText = viewDict["simpleText"] as? String {
+            self.viewCount = simpleText
+        }
+        
+        self.publishedAt = nil
+        if let pubDict = vr["publishedTimeText"] as? [String: Any],
+           let simpleText = pubDict["simpleText"] as? String {
+            self.publishedAt = simpleText
+        }
+        
+        self.isLive = false
+        if let badges = vr["badges"] as? [[String: Any]] {
+            self.isLive = badges.contains { $0.description.contains("LIVE") }
+        }
     }
 
     init?(compactVideoRenderer cvr: [String: Any]) {
         guard let id = cvr["videoId"] as? String else { return nil }
-        self.id          = id
-        self.title       = (cvr["title"] as? [String: Any])?["simpleText"] as? String ?? ""
-        self.channelName = (cvr["longBylineText"] as? [String: Any])?["runs"].asRuns ?? ""
-        self.channelID   = ""
-        let thumbs = (cvr["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]] ?? []
-        self.thumbnailURL = thumbs.last.flatMap { $0["url"] as? String }.flatMap(URL.init)
-        self.duration     = (cvr["lengthText"] as? [String: Any])?["simpleText"].flatMap { ($0 as? String)?.durationSeconds }
-        self.viewCount    = (cvr["viewCountText"] as? [String: Any])?["simpleText"] as? String
-        self.publishedAt  = nil
-        self.isLive       = false
+        self.id = id
+        
+        self.title = ""
+        if let titleDict = cvr["title"] as? [String: Any],
+           let simpleText = titleDict["simpleText"] as? String {
+            self.title = simpleText
+        }
+        
+        self.channelName = ""
+        if let ownerText = cvr["longBylineText"] as? [String: Any],
+           let runs = ownerText["runs"] as? [[String: Any]] {
+            self.channelName = runs.compactMap { $0["text"] as? String }.joined()
+        }
+        
+        self.channelID = ""
+        
+        var thumbnailURL: URL? = nil
+        if let thumbDict = cvr["thumbnail"] as? [String: Any],
+           let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
+           let lastThumb = thumbnails.last,
+           let urlString = lastThumb["url"] as? String {
+            thumbnailURL = URL(string: urlString)
+        }
+        self.thumbnailURL = thumbnailURL
+        
+        self.duration = nil
+        if let lengthDict = cvr["lengthText"] as? [String: Any],
+           let simpleText = lengthDict["simpleText"] as? String {
+            self.duration = simpleText.durationSeconds
+        }
+        
+        self.viewCount = nil
+        if let viewDict = cvr["viewCountText"] as? [String: Any],
+           let simpleText = viewDict["simpleText"] as? String {
+            self.viewCount = simpleText
+        }
+        
+        self.publishedAt = nil
+        self.isLive = false
     }
 }
 
 extension ChannelItem {
     init?(channelRenderer cr: [String: Any]) {
         guard let id = cr["channelId"] as? String else { return nil }
-        self.id              = id
-        self.name            = (cr["title"] as? [String: Any])?["simpleText"] as? String ?? ""
-        let thumbs           = (cr["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]] ?? []
-        self.avatarURL       = thumbs.last.flatMap { $0["url"] as? String }.flatMap(URL.init)
-        self.subscriberCount = (cr["subscriberCountText"] as? [String: Any])?["simpleText"] as? String
-        self.verified        = false
+        self.id = id
+        
+        self.name = ""
+        if let titleDict = cr["title"] as? [String: Any],
+           let simpleText = titleDict["simpleText"] as? String {
+            self.name = simpleText
+        }
+        
+        var avatarURL: URL? = nil
+        if let thumbDict = cr["thumbnail"] as? [String: Any],
+           let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
+           let lastThumb = thumbnails.last,
+           let urlString = lastThumb["url"] as? String {
+            avatarURL = URL(string: urlString)
+        }
+        self.avatarURL = avatarURL
+        
+        self.subscriberCount = nil
+        if let subDict = cr["subscriberCountText"] as? [String: Any],
+           let simpleText = subDict["simpleText"] as? String {
+            self.subscriberCount = simpleText
+        }
+        
+        self.verified = false
     }
 }
 
 // MARK: - JSON helpers
-protocol AnyOptional {
-    var anyValue: Any? { get }
-}
-extension Optional: AnyOptional {
-    var anyValue: Any? { self }
-}
-extension AnyOptional {
-    var dict: [String: Any]? { anyValue as? [String: Any] }
-    var asRuns: String? {
-        guard let runs = (anyValue as? [String: Any])?["runs"] as? [[String: Any]] else { return nil }
-        return runs.compactMap { $0["text"] as? String }.joined()
-    }
-}
-
 extension String {
     /// Parses "HH:MM:SS" or "MM:SS" into total seconds.
     var durationSeconds: Int? {
