@@ -99,7 +99,6 @@ final class NeuroEngine {
             case 0.15...:     learningRate = 0.02; isPositive = true
             default:          return  // below min threshold — ignore
             }
-            isPositive = true
         case .skipped:
             learningRate = -0.04; isPositive = false
         case .disliked:

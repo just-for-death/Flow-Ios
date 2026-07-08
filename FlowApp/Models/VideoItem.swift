@@ -337,56 +337,63 @@ extension VideoItem {
         guard let id = vr["videoId"] as? String else { return nil }
         self.id = id
         
-        self.title = ""
         if let titleDict = vr["title"] as? [String: Any],
            let runs = titleDict["runs"] as? [[String: Any]] {
             self.title = runs.compactMap { $0["text"] as? String }.joined()
+        } else {
+            self.title = ""
         }
         
-        self.channelName = ""
-        self.channelID = ""
+        var tempChannelName = ""
+        var tempChannelID = ""
         if let ownerText = vr["ownerText"] as? [String: Any],
            let runs = ownerText["runs"] as? [[String: Any]] {
-            self.channelName = runs.compactMap { $0["text"] as? String }.joined()
+            tempChannelName = runs.compactMap { $0["text"] as? String }.joined()
             
             if let firstRun = runs.first,
                let nav = firstRun["navigationEndpoint"] as? [String: Any],
                let browse = nav["browseEndpoint"] as? [String: Any],
                let browseId = browse["browseId"] as? String {
-                self.channelID = browseId
+                tempChannelID = browseId
             }
         }
+        self.channelName = tempChannelName
+        self.channelID = tempChannelID
         
-        var thumbnailURL: URL? = nil
+        var tempThumbnailURL: URL? = nil
         if let thumbDict = vr["thumbnail"] as? [String: Any],
            let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
            let lastThumb = thumbnails.last,
            let urlString = lastThumb["url"] as? String {
-            thumbnailURL = URL(string: urlString)
+            tempThumbnailURL = URL(string: urlString)
         }
-        self.thumbnailURL = thumbnailURL
+        self.thumbnailURL = tempThumbnailURL
         
-        self.duration = nil
         if let lengthDict = vr["lengthText"] as? [String: Any],
            let simpleText = lengthDict["simpleText"] as? String {
             self.duration = simpleText.durationSeconds
+        } else {
+            self.duration = nil
         }
         
-        self.viewCount = nil
         if let viewDict = vr["viewCountText"] as? [String: Any],
            let simpleText = viewDict["simpleText"] as? String {
             self.viewCount = simpleText
+        } else {
+            self.viewCount = nil
         }
         
-        self.publishedAt = nil
         if let pubDict = vr["publishedTimeText"] as? [String: Any],
            let simpleText = pubDict["simpleText"] as? String {
             self.publishedAt = simpleText
+        } else {
+            self.publishedAt = nil
         }
         
-        self.isLive = false
         if let badges = vr["badges"] as? [[String: Any]] {
             self.isLive = badges.contains { $0.description.contains("LIVE") }
+        } else {
+            self.isLive = false
         }
     }
 
@@ -394,39 +401,43 @@ extension VideoItem {
         guard let id = cvr["videoId"] as? String else { return nil }
         self.id = id
         
-        self.title = ""
         if let titleDict = cvr["title"] as? [String: Any],
            let simpleText = titleDict["simpleText"] as? String {
             self.title = simpleText
+        } else {
+            self.title = ""
         }
         
-        self.channelName = ""
         if let ownerText = cvr["longBylineText"] as? [String: Any],
            let runs = ownerText["runs"] as? [[String: Any]] {
             self.channelName = runs.compactMap { $0["text"] as? String }.joined()
+        } else {
+            self.channelName = ""
         }
         
         self.channelID = ""
         
-        var thumbnailURL: URL? = nil
+        var tempThumbnailURL: URL? = nil
         if let thumbDict = cvr["thumbnail"] as? [String: Any],
            let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
            let lastThumb = thumbnails.last,
            let urlString = lastThumb["url"] as? String {
-            thumbnailURL = URL(string: urlString)
+            tempThumbnailURL = URL(string: urlString)
         }
-        self.thumbnailURL = thumbnailURL
+        self.thumbnailURL = tempThumbnailURL
         
-        self.duration = nil
         if let lengthDict = cvr["lengthText"] as? [String: Any],
            let simpleText = lengthDict["simpleText"] as? String {
             self.duration = simpleText.durationSeconds
+        } else {
+            self.duration = nil
         }
         
-        self.viewCount = nil
         if let viewDict = cvr["viewCountText"] as? [String: Any],
            let simpleText = viewDict["simpleText"] as? String {
             self.viewCount = simpleText
+        } else {
+            self.viewCount = nil
         }
         
         self.publishedAt = nil
@@ -439,25 +450,27 @@ extension ChannelItem {
         guard let id = cr["channelId"] as? String else { return nil }
         self.id = id
         
-        self.name = ""
         if let titleDict = cr["title"] as? [String: Any],
            let simpleText = titleDict["simpleText"] as? String {
             self.name = simpleText
+        } else {
+            self.name = ""
         }
         
-        var avatarURL: URL? = nil
+        var tempAvatarURL: URL? = nil
         if let thumbDict = cr["thumbnail"] as? [String: Any],
            let thumbnails = thumbDict["thumbnails"] as? [[String: Any]],
            let lastThumb = thumbnails.last,
            let urlString = lastThumb["url"] as? String {
-            avatarURL = URL(string: urlString)
+            tempAvatarURL = URL(string: urlString)
         }
-        self.avatarURL = avatarURL
+        self.avatarURL = tempAvatarURL
         
-        self.subscriberCount = nil
-        if let subDict = cr["subscriberCountText"] as? [String: Any],
-           let simpleText = subDict["simpleText"] as? String {
+        if let subCountText = cr["subscriberCountText"] as? [String: Any],
+           let simpleText = subCountText["simpleText"] as? String {
             self.subscriberCount = simpleText
+        } else {
+            self.subscriberCount = nil
         }
         
         self.verified = false
