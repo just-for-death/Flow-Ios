@@ -140,4 +140,11 @@ extension DownloadService: URLSessionDownloadDelegate {
             self.saveMetadata()
         }
     }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        DispatchQueue.main.async {
+            self.backgroundCompletionHandler?()
+            self.backgroundCompletionHandler = nil
+        }
+    }
 }
