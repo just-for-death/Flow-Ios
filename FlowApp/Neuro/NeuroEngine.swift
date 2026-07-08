@@ -184,9 +184,8 @@ final class NeuroEngine {
 
     // MARK: - Mark not interested
     func markNotInterested(video: VideoItem) {
-        Task.detached(priority: .utility) { [weak self] in
-            await MainActor.run {
-                guard let self else { return }
+        brainQueue.async { [weak self] in
+            guard let self else { return }
                 let now = Date().timeIntervalSince1970
                 // Hard-suppress this video
                 var suppressed = self.brain.suppressedVideoIds
@@ -231,7 +230,6 @@ final class NeuroEngine {
                 self.brain.timeVectors[bucket] = timeVec
 
                 self.scheduleDebouncedSave()
-            }
         }
     }
 
@@ -644,7 +642,7 @@ final class NeuroEngine {
         brainQueue.async { [weak self] in
             guard let self else { return }
             self.brain.watchHistoryMap[videoId] = percent
-            self.scheduleSave()
+            self.scheduleDebouncedSave()
         }
     }
 

@@ -50,7 +50,7 @@ enum FlowSyncCrypto {
         let key = SymmetricKey(data: prk)
         var out = Data(); var t = Data(); var pos = 0; var counter: UInt8 = 1
         while pos < length {
-            var input = t + info + Data([counter])
+            let input = t + info + Data([counter])
             t = Data(HMAC<SHA256>.authenticationCode(for: input, using: key))
             let toCopy = min(t.count, length - pos)
             out.append(t.prefix(toCopy))
@@ -612,8 +612,9 @@ final class SyncManager {
         state = .connecting
         let sid = sessionID ?? FlowSyncCrypto.randomSessionID()
         let deviceName = await MainActor.run { UIDevice.current.name }
+        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString ?? "ios-\(UUID().uuidString)" }
         let hello     = SyncHello(
-            deviceId:   UIDevice.current.identifierForVendor?.uuidString ?? "ios-\(UUID().uuidString)",
+            deviceId:   deviceId,
             deviceName: deviceName,
             platform:   "iOS",
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",

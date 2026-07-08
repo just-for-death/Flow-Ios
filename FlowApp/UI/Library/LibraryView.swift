@@ -115,7 +115,7 @@ struct HistoryRow: View {
                         .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
-                    Text("Watched \((watchedFraction * 100).formatted(.number.precision(.fractionLength(0))))%")
+                    Text(String(format: "Watched %.0f%%", watchedFraction * 100))
                         .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
