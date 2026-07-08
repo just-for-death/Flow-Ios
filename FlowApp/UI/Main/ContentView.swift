@@ -114,11 +114,11 @@ struct MiniPlayerBar: View {
             // Title + channel
             VStack(alignment: .leading, spacing: 2) {
                 Text(player.currentVideo?.title ?? "")
-                    .font(FlowTheme.Type.bodyMedium)
+                    .font(FlowTheme.Typography.bodyMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                     .lineLimit(1)
                 Text(player.currentVideo?.channelName ?? "")
-                    .font(FlowTheme.Type.bodySmall)
+                    .font(FlowTheme.Typography.bodySmall)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     .lineLimit(1)
             }

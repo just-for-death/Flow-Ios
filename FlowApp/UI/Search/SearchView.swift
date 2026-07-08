@@ -46,7 +46,7 @@ struct SearchView: View {
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
 
             TextField("Search YouTube...", text: $query)
-                .font(FlowTheme.Type.bodyLarge)
+                .font(FlowTheme.Typography.bodyLarge)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
                 .submitLabel(.search)
                 .onSubmit { performSearch() }
@@ -90,7 +90,7 @@ struct SearchView: View {
                                 Image(systemName: "magnifyingglass")
                                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                                 Text(suggestion)
-                                    .font(FlowTheme.Type.bodyMedium)
+                                    .font(FlowTheme.Typography.bodyMedium)
                                     .foregroundStyle(FlowTheme.Colors.onSurface)
                                 Spacer()
                                 Image(systemName: "arrow.up.left")
@@ -111,7 +111,7 @@ struct SearchView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 52)).foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 Text("Search for videos, music, or channels")
-                    .font(FlowTheme.Type.bodyMedium)
+                    .font(FlowTheme.Typography.bodyMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,7 +147,7 @@ struct SearchView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 40)).foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             Text(error.localizedDescription)
-                .font(FlowTheme.Type.bodyMedium).foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                .font(FlowTheme.Typography.bodyMedium).foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             Button("Retry") { performSearch() }.foregroundStyle(FlowTheme.Colors.primary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -191,11 +191,11 @@ struct ChannelRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(channel.name)
-                    .font(FlowTheme.Type.titleSmall)
+                    .font(FlowTheme.Typography.titleSmall)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                 if let subs = channel.subscriberCount {
                     Text(subs)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
             }
@@ -224,7 +224,7 @@ struct PlaylistRow: View {
 
                 if let count = playlist.videoCount {
                     Text("\(count)")
-                        .font(FlowTheme.Type.labelSmall)
+                        .font(FlowTheme.Typography.labelSmall)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(.black.opacity(0.75))
@@ -235,12 +235,12 @@ struct PlaylistRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.title)
-                    .font(FlowTheme.Type.bodyMedium)
+                    .font(FlowTheme.Typography.bodyMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                     .lineLimit(2)
                 if let owner = playlist.ownerName {
                     Text(owner)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
             }

@@ -109,14 +109,14 @@ struct HistoryRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(event.title)
-                        .font(FlowTheme.Type.bodyMedium)
+                        .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
                     Text(event.channelName)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
-                        .font(FlowTheme.Type.labelSmall)
+                        .font(FlowTheme.Typography.labelSmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.6))
                 }
                 Spacer()
@@ -165,11 +165,11 @@ struct LikedTab: View {
                                     
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(like.meta.title.isEmpty ? like.title : like.meta.title)
-                                            .font(FlowTheme.Type.bodyMedium)
+                                            .font(FlowTheme.Typography.bodyMedium)
                                             .foregroundStyle(FlowTheme.Colors.onSurface)
                                             .lineLimit(2)
                                         Text(like.meta.artist.isEmpty ? like.channelName : like.meta.artist)
-                                            .font(FlowTheme.Type.bodySmall)
+                                            .font(FlowTheme.Typography.bodySmall)
                                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                                     }
                                     Spacer()
@@ -236,11 +236,11 @@ struct DownloadRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
-                    .font(FlowTheme.Type.bodyMedium)
+                    .font(FlowTheme.Typography.bodyMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                     .lineLimit(2)
                 Text(task.channelName)
-                    .font(FlowTheme.Type.bodySmall)
+                    .font(FlowTheme.Typography.bodySmall)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
 
                 if task.progress < 1 {
@@ -285,11 +285,11 @@ struct PlaylistsTab: View {
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(pl.title)
-                                        .font(FlowTheme.Type.bodyMedium)
+                                        .font(FlowTheme.Typography.bodyMedium)
                                         .foregroundStyle(FlowTheme.Colors.onSurface)
                                         .lineLimit(1)
                                     Text("\(pl.items.count) tracks")
-                                        .font(FlowTheme.Type.bodySmall)
+                                        .font(FlowTheme.Typography.bodySmall)
                                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                                 }
                                 Spacer()
@@ -313,7 +313,7 @@ func emptyState(icon: String, message: String) -> some View {
             .font(.system(size: 52))
             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
         Text(message)
-            .font(FlowTheme.Type.bodyMedium)
+            .font(FlowTheme.Typography.bodyMedium)
             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             .multilineTextAlignment(.center)
             .padding(.horizontal, FlowTheme.Spacing.xl)

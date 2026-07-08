@@ -76,7 +76,7 @@ struct OnboardingView: View {
                         }
                     } label: {
                         Text(page < pages.count - 1 ? "Continue" : "Get Started")
-                            .font(FlowTheme.Type.titleMedium)
+                            .font(FlowTheme.Typography.titleMedium)
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(FlowTheme.Spacing.md)
@@ -87,7 +87,7 @@ struct OnboardingView: View {
 
                     if page < pages.count - 1 {
                         Button("Skip") { onComplete() }
-                            .font(FlowTheme.Type.bodyMedium)
+                            .font(FlowTheme.Typography.bodyMedium)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
                 }
@@ -130,12 +130,12 @@ struct OnboardingPageView: View {
             // Text
             VStack(spacing: FlowTheme.Spacing.sm) {
                 Text(p.title)
-                    .font(FlowTheme.Type.headlineMedium)
+                    .font(FlowTheme.Typography.headlineMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                     .multilineTextAlignment(.center)
 
                 Text(p.body)
-                    .font(FlowTheme.Type.bodyLarge)
+                    .font(FlowTheme.Typography.bodyLarge)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, FlowTheme.Spacing.xl)

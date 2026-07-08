@@ -36,7 +36,7 @@ enum FlowTheme {
     }
 
     // MARK: Typography
-    enum Type {
+    enum Typography {
         static let displayLarge  = Font.system(size: 57, weight: .regular, design: .rounded)
         static let displayMedium = Font.system(size: 45, weight: .regular, design: .rounded)
         static let headlineLarge = Font.system(size: 32, weight: .semibold, design: .rounded)
@@ -135,7 +135,7 @@ struct FlowChip: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(FlowTheme.Type.labelMedium)
+                .font(FlowTheme.Typography.labelMedium)
                 .foregroundStyle(isSelected ? FlowTheme.Colors.onPrimary : FlowTheme.Colors.onSurfaceVariant)
                 .padding(.horizontal, FlowTheme.Spacing.md)
                 .padding(.vertical, FlowTheme.Spacing.xs + 2)
@@ -216,5 +216,19 @@ struct FlowProgressBar: View {
         }
         .frame(height: 20)
         .animation(FlowTheme.Animation.standard, value: isDragging)
+    }
+}
+
+// MARK: - FlowChipButtonStyle
+struct FlowChipButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, FlowTheme.Spacing.md)
+            .padding(.vertical, FlowTheme.Spacing.sm)
+            .background(FlowTheme.Colors.surfaceVariant)
+            .foregroundStyle(FlowTheme.Colors.onSurface)
+            .clipShape(Capsule())
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
     }
 }

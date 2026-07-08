@@ -104,14 +104,14 @@ struct HomeView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             Text("Couldn't load feed")
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
             Text(error.localizedDescription)
-                .font(FlowTheme.Type.bodySmall)
+                .font(FlowTheme.Typography.bodySmall)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
             Button("Try Again") { vm.refresh(neuro: neuro) }
-                .font(FlowTheme.Type.labelLarge)
+                .font(FlowTheme.Typography.labelLarge)
                 .foregroundStyle(FlowTheme.Colors.primary)
         }
         .padding(FlowTheme.Spacing.xl)
@@ -140,7 +140,7 @@ struct VideoCard: View {
 
                     if let dur = video.duration {
                         Text(dur.durationFormatted)
-                            .font(FlowTheme.Type.labelSmall)
+                            .font(FlowTheme.Typography.labelSmall)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -151,7 +151,7 @@ struct VideoCard: View {
 
                     if video.isLive {
                         Text("LIVE")
-                            .font(FlowTheme.Type.labelSmall.bold())
+                            .font(FlowTheme.Typography.labelSmall.bold())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -164,19 +164,19 @@ struct VideoCard: View {
                 // Info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(video.title)
-                        .font(FlowTheme.Type.bodyMedium)
+                        .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
                     Text(video.channelName)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                         .lineLimit(1)
 
                     if let views = video.viewCount, let pub = video.publishedAt {
                         Text("\(views) • \(pub)")
-                            .font(FlowTheme.Type.labelSmall)
+                            .font(FlowTheme.Typography.labelSmall)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.7))
                     }
                 }

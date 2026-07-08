@@ -67,11 +67,11 @@ struct MusicTrackRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(track.title)
-                        .font(FlowTheme.Type.bodyMedium)
+                        .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(1)
                     Text(track.channelName)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                         .lineLimit(1)
                 }
@@ -80,7 +80,7 @@ struct MusicTrackRow: View {
 
                 if let dur = track.duration {
                     Text(dur.durationFormatted)
-                        .font(FlowTheme.Type.labelSmall)
+                        .font(FlowTheme.Typography.labelSmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
 
@@ -153,13 +153,13 @@ struct MusicPlayerView: View {
                 // Track info
                 VStack(spacing: FlowTheme.Spacing.xs) {
                     Text(player.currentVideo?.title ?? "")
-                        .font(FlowTheme.Type.headlineSmall)
+                        .font(FlowTheme.Typography.headlineSmall)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(player.currentVideo?.channelName ?? "")
-                        .font(FlowTheme.Type.bodyMedium)
+                        .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -177,11 +177,11 @@ struct MusicPlayerView: View {
                     )
                     HStack {
                         Text(player.currentTime.timeFormatted)
-                            .font(FlowTheme.Type.labelSmall)
+                            .font(FlowTheme.Typography.labelSmall)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                         Spacer()
                         Text(player.duration.timeFormatted)
-                            .font(FlowTheme.Type.labelSmall)
+                            .font(FlowTheme.Typography.labelSmall)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
                 }
@@ -291,7 +291,7 @@ struct LyricsSheet: View {
                     .padding(.top, FlowTheme.Spacing.md)
                 
                 Text(player.currentVideo?.title ?? "Lyrics")
-                    .font(FlowTheme.Type.titleLarge)
+                    .font(FlowTheme.Typography.titleLarge)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
                 
                 if isLoading {
@@ -310,7 +310,7 @@ struct LyricsSheet: View {
                                 ForEach(Array(lyrics.enumerated()), id: \.offset) { index, line in
                                     let isActive = isActiveLine(index: index)
                                     Text(line.text.isEmpty ? "• • •" : line.text)
-                                        .font(isActive ? FlowTheme.Type.headlineMedium : FlowTheme.Type.bodyLarge)
+                                        .font(isActive ? FlowTheme.Typography.headlineMedium : FlowTheme.Typography.bodyLarge)
                                         .foregroundStyle(isActive ? FlowTheme.Colors.primary : FlowTheme.Colors.onSurfaceVariant)
                                         .multilineTextAlignment(.center)
                                         .frame(maxWidth: .infinity)

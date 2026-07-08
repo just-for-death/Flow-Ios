@@ -70,7 +70,7 @@ struct SettingsView: View {
                                     SponsorBlockService.shared.enabledCategories = sbCats
                                 }
                             ))
-                            .font(FlowTheme.Type.bodyMedium)
+                            .font(FlowTheme.Typography.bodyMedium)
                         }
                     }
                 } header: {
@@ -153,10 +153,10 @@ struct NeuroDashboardView: View {
                         .font(.system(size: 48))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(persona.title)
-                            .font(FlowTheme.Type.titleMedium)
+                            .font(FlowTheme.Typography.titleMedium)
                             .foregroundStyle(FlowTheme.Colors.onSurface)
                         Text(persona.rawValue.capitalized)
-                            .font(FlowTheme.Type.bodySmall)
+                            .font(FlowTheme.Typography.bodySmall)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
                 }
@@ -172,11 +172,11 @@ struct NeuroDashboardView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(kv.key.capitalized)
-                                .font(FlowTheme.Type.bodyMedium)
+                                .font(FlowTheme.Typography.bodyMedium)
                                 .foregroundStyle(FlowTheme.Colors.onSurface)
                             Spacer()
                             Text(String(format: "%.2f", kv.value))
-                                .font(FlowTheme.Type.labelSmall)
+                                .font(FlowTheme.Typography.labelSmall)
                                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                         }
                         // Interest bar

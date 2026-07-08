@@ -46,11 +46,11 @@ struct SyncView: View {
                 .foregroundStyle(FlowTheme.Colors.primary)
 
             Text("Sync with Android")
-                .font(FlowTheme.Type.headlineMedium)
+                .font(FlowTheme.Typography.headlineMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
 
             Text("Transfer your watch history, liked videos, playlists, settings, and FlowNeuro brain between devices over your local Wi-Fi. No internet required.")
-                .font(FlowTheme.Type.bodyMedium)
+                .font(FlowTheme.Typography.bodyMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, FlowTheme.Spacing.xl)
@@ -62,7 +62,7 @@ struct SyncView: View {
                     mode = .host
                 } label: {
                     Label("Show QR Code (Host)", systemImage: "qrcode")
-                        .font(FlowTheme.Type.titleMedium)
+                        .font(FlowTheme.Typography.titleMedium)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(FlowTheme.Spacing.md)
@@ -74,7 +74,7 @@ struct SyncView: View {
                     mode = .join
                 } label: {
                     Label("Scan QR Code (Join)", systemImage: "camera.viewfinder")
-                        .font(FlowTheme.Type.titleMedium)
+                        .font(FlowTheme.Typography.titleMedium)
                         .foregroundStyle(FlowTheme.Colors.primary)
                         .frame(maxWidth: .infinity)
                         .padding(FlowTheme.Spacing.md)
@@ -141,7 +141,7 @@ struct SyncHostQRView: View {
     var body: some View {
         VStack(spacing: FlowTheme.Spacing.lg) {
             Text("On your Android device, go to\nSettings → Sync → Scan QR Code")
-                .font(FlowTheme.Type.bodyMedium)
+                .font(FlowTheme.Typography.bodyMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
 
@@ -165,7 +165,7 @@ struct SyncHostQRView: View {
             }
 
             Text("Waiting for Android to connect…")
-                .font(FlowTheme.Type.bodySmall)
+                .font(FlowTheme.Typography.bodySmall)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
 
             if !sync.sasCode.isEmpty {
@@ -206,11 +206,11 @@ struct SASConfirmView: View {
     var body: some View {
         VStack(spacing: FlowTheme.Spacing.md) {
             Text("Verify Security Code")
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
 
             Text("Does this code match the one shown on your other device?")
-                .font(FlowTheme.Type.bodySmall)
+                .font(FlowTheme.Typography.bodySmall)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
 
@@ -230,7 +230,7 @@ struct SASConfirmView: View {
                 Button("Reject") {
                     sync.confirmSAS(false)
                 }
-                .font(FlowTheme.Type.labelLarge)
+                .font(FlowTheme.Typography.labelLarge)
                 .foregroundStyle(FlowTheme.Colors.error)
                 .frame(maxWidth: .infinity)
                 .padding(FlowTheme.Spacing.sm)
@@ -240,7 +240,7 @@ struct SASConfirmView: View {
                 Button("Confirm") {
                     sync.confirmSAS(true)
                 }
-                .font(FlowTheme.Type.labelLarge)
+                .font(FlowTheme.Typography.labelLarge)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(FlowTheme.Spacing.sm)
@@ -308,14 +308,14 @@ struct SyncProgressView: View {
                 .scaleEffect(2)
                 .tint(FlowTheme.Colors.primary)
             Text(message)
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
             if let p = progress {
                 ProgressView(value: p)
                     .tint(FlowTheme.Colors.primary)
                     .padding(.horizontal, FlowTheme.Spacing.xl)
                 Text("\(Int(p * 100))%")
-                    .font(FlowTheme.Type.bodySmall)
+                    .font(FlowTheme.Typography.bodySmall)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             }
             Spacer()
@@ -333,14 +333,14 @@ struct SyncDoneView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(FlowTheme.Colors.primary)
             Text("Sync Complete")
-                .font(FlowTheme.Type.headlineMedium)
+                .font(FlowTheme.Typography.headlineMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
             Text("Successfully synced with \(peerName)")
-                .font(FlowTheme.Type.bodyMedium)
+                .font(FlowTheme.Typography.bodyMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             Spacer()
             Button("Done") { onDismiss() }
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(FlowTheme.Spacing.md)
@@ -362,16 +362,16 @@ struct SyncErrorView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(FlowTheme.Colors.error)
             Text("Sync Failed")
-                .font(FlowTheme.Type.headlineMedium)
+                .font(FlowTheme.Typography.headlineMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
             Text(error.localizedDescription)
-                .font(FlowTheme.Type.bodySmall)
+                .font(FlowTheme.Typography.bodySmall)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, FlowTheme.Spacing.xl)
             Spacer()
             Button("Try Again") { onRetry() }
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(FlowTheme.Spacing.md)

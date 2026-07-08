@@ -133,10 +133,10 @@ struct VideoPlayerView: View {
 
                         HStack {
                             Text(player.currentTime.timeFormatted)
-                                .font(FlowTheme.Type.labelSmall).foregroundStyle(.white)
+                                .font(FlowTheme.Typography.labelSmall).foregroundStyle(.white)
                             Spacer()
                             Text(player.duration.timeFormatted)
-                                .font(FlowTheme.Type.labelSmall).foregroundStyle(.white.opacity(0.7))
+                                .font(FlowTheme.Typography.labelSmall).foregroundStyle(.white.opacity(0.7))
                         }
                         .padding(.horizontal, FlowTheme.Spacing.md)
 
@@ -171,7 +171,7 @@ struct VideoPlayerView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 32)).foregroundStyle(.yellow)
                     Text(error.localizedDescription)
-                        .font(FlowTheme.Type.bodySmall).foregroundStyle(.white)
+                        .font(FlowTheme.Typography.bodySmall).foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                 }
                 .padding()
@@ -185,18 +185,18 @@ struct VideoPlayerView: View {
         VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
             // Title (DeArrow or original)
             Text(deArrowBranding?.title ?? player.currentVideo?.title ?? "")
-                .font(FlowTheme.Type.titleMedium)
+                .font(FlowTheme.Typography.titleMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Channel + meta
             HStack {
                 Text(player.currentVideo?.channelName ?? "")
-                    .font(FlowTheme.Type.bodyMedium)
+                    .font(FlowTheme.Typography.bodyMedium)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 if let views = player.currentVideo?.viewCount {
                     Text("• \(views) views")
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.7))
                 }
             }
@@ -216,7 +216,7 @@ struct VideoPlayerView: View {
                     }
                     .frame(width: 80, height: 4)
                 }
-                .font(FlowTheme.Type.labelMedium)
+                .font(FlowTheme.Typography.labelMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             }
             
@@ -279,7 +279,7 @@ struct VideoPlayerView: View {
     private var relatedSection: some View {
         VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
             Text("Up Next")
-                .font(FlowTheme.Type.titleSmall)
+                .font(FlowTheme.Typography.titleSmall)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
 
             ForEach(relatedVideos) { video in
@@ -361,7 +361,7 @@ struct SpeedMenu: View {
             }
         } label: {
             Text("\(player.playbackRate.formatted())×")
-                .font(FlowTheme.Type.labelMedium).foregroundStyle(.white)
+                .font(FlowTheme.Typography.labelMedium).foregroundStyle(.white)
                 .padding(.horizontal, FlowTheme.Spacing.sm)
                 .padding(.vertical, 6)
                 .background(.white.opacity(0.15))
@@ -388,11 +388,11 @@ struct HorizontalVideoRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title)
-                        .font(FlowTheme.Type.bodyMedium)
+                        .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
                     Text(video.channelName)
-                        .font(FlowTheme.Type.bodySmall)
+                        .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
                 Spacer()
