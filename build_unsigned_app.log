@@ -1,0 +1,261 @@
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device }
+{ platform:macOS, arch:arm64, variant:Designed for [iPad,iPhone], id:0000FE00-343A79319AA17942, name:My Mac }
+{ platform:iOS Simulator, id:dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder, name:Any iOS Simulator Device }
+▸ Clean Succeeded
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device }
+{ platform:macOS, arch:arm64, variant:Designed for [iPad,iPhone], id:0000FE00-343A79319AA17942, name:My Mac }
+{ platform:iOS Simulator, id:dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder, name:Any iOS Simulator Device }
+▸ Processing empty-Kingfisher_Kingfisher.plist
+▸ Copying /Users/builder/clone/build/Release-iphoneos/Kingfisher_Kingfisher.bundle/PrivacyInfo.xcprivacy
+▸ Processing empty-GRDB_GRDB.plist
+▸ Copying /Users/builder/clone/build/Release-iphoneos/GRDB_GRDB.bundle/PrivacyInfo.xcprivacy
+▸ Touching Kingfisher_Kingfisher.bundle (in target 'Kingfisher_Kingfisher' from project 'Kingfisher')
+▸ Touching GRDB_GRDB.bundle (in target 'GRDB_GRDB' from project 'GRDB')
+▸ Linking Kingfisher.o
+▸ Linking GRDB.o
+▸ Processing Info.plist
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:33:32: cannot find type 'AVPictureInPictureController' in scope
+
+    private var pipController: AVPictureInPictureController?
+                               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:255:25: cannot find type 'AVPictureInPictureControllerDelegate' in scope
+
+extension FlowAVPlayer: AVPictureInPictureControllerDelegate {
+^
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:256:75: cannot find type 'AVPictureInPictureController' in scope
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:259:74: cannot find type 'AVPictureInPictureController' in scope
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+                                                                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:66:45: incorrect argument labels in call (have 'videoURL:audioURL:fallbackURL:duration:format:quality:isMusic:thumbnailURL:', expected 'videoURL:audioURL:fallbackURL:formats:duration:title:channelName:thumbnailURL:')
+
+                self.streamInfo = StreamInfo(
+                                                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:68:37: cannot convert value of type 'Int?' to expected argument type 'Double?'
+
+                    duration: video.duration ?? item.asset.duration.seconds,
+                                            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:69:29: cannot convert value of type 'String' to expected argument type '[StreamFormat]'
+
+                    format: "mp4", quality: "local", isMusic: false, thumbnailURL: video.thumbnailURL
+                                    ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:69:63: cannot convert value of type 'Bool' to expected argument type 'String'
+
+                    format: "mp4", quality: "local", isMusic: false, thumbnailURL: video.thumbnailURL
+                            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:162:15: cannot find 'AVPictureInPictureController' in scope
+
+        guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
+                                                              ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift:163:25: cannot find 'AVPictureInPictureController' in scope
+
+        pipController = AVPictureInPictureController(playerLayer: layer)
+              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:54:17: cannot find 'AVAudioSession' in scope
+
+            try AVAudioSession.sharedInstance().setCategory(
+                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:55:18: cannot infer contextual base in reference to member 'playback'
+
+                .playback,
+                ^~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:56:24: cannot infer contextual base in reference to member 'moviePlayback'
+
+                mode: .moviePlayback,
+                ~^~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:57:28: reference to member 'allowAirPlay' cannot be resolved without a contextual type
+
+                options: [.allowAirPlay, .allowBluetooth]
+                      ~^~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:57:43: reference to member 'allowBluetooth' cannot be resolved without a contextual type
+
+                options: [.allowAirPlay, .allowBluetooth]
+                           ^
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:59:17: cannot find 'AVAudioSession' in scope
+
+            try AVAudioSession.sharedInstance().setActive(true)
+                                          ^
+
+
+
+❌  /Users/builder/clone/FlowApp/FlowApp.swift:73:32: value of type 'DownloadService' has no member 'backgroundCompletionHandler'
+
+        DownloadService.shared.backgroundCompletionHandler = completionHandler
+                ^~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:53:17: variable 'input' was never mutated; consider changing to 'let' constant
+
+            var input = t + info + Data([counter])
+        ~~~~~~~~~~~~~~~~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:386:13: call can throw but is not marked with 'try'
+
+            { try await sendFrame(type: FrameType.capabilities, value: local) }() == ()
+            ~~~ ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:390:13: call can throw but is not marked with 'try'
+
+            { let p = try await expectFrame(type: FrameType.capabilities); try await sendFrame(type: FrameType.capabilities, value: local); return try decode(SyncCapabilities.self, from: p) }()
+            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:386:13: expression is 'async' but is not marked with 'await'
+
+            { try await sendFrame(type: FrameType.capabilities, value: local) }() == ()
+            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:390:13: expression is 'async' but is not marked with 'await'
+
+            { let p = try await expectFrame(type: FrameType.capabilities); try await sendFrame(type: FrameType.capabilities, value: local); return try decode(SyncCapabilities.self, from: p) }()
+            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:578:34: type 'FlowSyncCrypto' has no member 'generateMasterKey'
+
+        let key = FlowSyncCrypto.generateMasterKey()
+            ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:581:22: value of type 'Data' has no member 'base64URLEncodedString'
+
+            sid: sid.base64URLEncodedString(),
+                  ~~~~~~~~~~~~~~ ^~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:633:35: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+
+            await MainActor.run { self?.sasCode = sas }
+                 ~~~ ^~~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:613:25: expression is 'async' but is not marked with 'await'; this is an error in the Swift 6 language mode
+
+        let hello     = SyncHello(
+                                  ^
+
+
+
+⚠️  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:615:25: expression is 'async' but is not marked with 'await'; this is an error in the Swift 6 language mode
+
+            deviceName: UIDevice.current.name,
+                        ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:658:20: actor-isolated instance method 'close()' cannot be called from outside of the actor
+
+        connection.close()
+                        ^
+
+
+
+❌  /Users/builder/clone/FlowApp/Sync/FlowSync.swift:748:69: cannot assign through subscript: 'brain' setter is inaccessible
+
+                            NeuroEngine.shared.brain.watchHistoryMap[videoId] = Float(pct)
+        ~~~~~~~~~~~^~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/UI/Library/LibraryView.swift:85:16: cannot find type 'WatchEvent' in scope
+
+    let event: WatchEvent
+                            ~~~~~~~~~~~~~~~~~~~~~~~~                ^
+
+
+
+❌  /Users/builder/clone/FlowApp/UI/Library/LibraryView.swift:55:18: 'watchHistory' is inaccessible due to 'private' protection level
+
+        if neuro.watchHistory.isEmpty {
+               ^~~~~~~~~~
+
+
+
+❌  /Users/builder/clone/FlowApp/UI/Library/LibraryView.swift:194:47: 'metadataStore' is inaccessible due to 'private' protection level
+
+        let downloads = Array(downloadService.metadataStore.values).sorted { $0.title < $1.title }
+                ^
+
+
+
+⚠️  /Users/builder/clone/FlowApp/Neuro/NeuroEngine.swift:189:27: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+
+                guard let self else { return }
+                ^
+
+
+** BUILD FAILED **
+
+
+The following build commands failed:
+	CompileSwift normal arm64 (in target 'Flow' from project 'Flow')
+	SwiftCompile normal arm64 Compiling\ ContentView.swift,\ DeArrowService.swift,\ DownloadService.swift,\ FlowAVPlayer.swift,\ FlowApp.swift,\ FlowDatabase.swift,\ FlowSync.swift,\ FlowTheme.swift,\ HomeView.swift,\ HomeViewModel.swift,\ InnerTubeClient.swift,\ LibraryView.swift,\ LyricsService.swift,\ MusicHomeView.swift,\ MusicPlayerView.swift,\ NeuroEngine.swift,\ NeuroModels.swift,\ NeuroStorage.swift,\ NeuroTokenizer.swift,\ NeuroVectorMath.swift,\ OnboardingView.swift,\ SearchView.swift,\ SettingsView.swift,\ SponsorBlockService.swift,\ SyncView.swift,\ VideoItem.swift,\ VideoPlayerView.swift /Users/builder/clone/FlowApp/UI/Main/ContentView.swift /Users/builder/clone/FlowApp/Player/DeArrowService.swift /Users/builder/clone/FlowApp/Services/DownloadService.swift /Users/builder/clone/FlowApp/Player/FlowAVPlayer.swift /Users/builder/clone/FlowApp/FlowApp.swift /Users/builder/clone/FlowApp/Persistence/FlowDatabase.swift /Users/builder/clone/FlowApp/Sync/FlowSync.swift /Users/builder/clone/FlowApp/UI/Theme/FlowTheme.swift /Users/builder/clone/FlowApp/UI/Home/HomeView.swift /Users/builder/clone/FlowApp/UI/Home/HomeViewModel.swift /Users/builder/clone/FlowApp/Network/InnerTubeClient.swift /Users/builder/clone/FlowApp/UI/Library/LibraryView.swift /Users/builder/clone/FlowApp/Services/LyricsService.swift /Users/builder/clone/FlowApp/UI/Music/MusicHomeView.swift /Users/builder/clone/FlowApp/UI/Music/MusicPlayerView.swift /Users/builder/clone/FlowApp/Neuro/NeuroEngine.swift /Users/builder/clone/FlowApp/Neuro/NeuroModels.swift /Users/builder/clone/FlowApp/Neuro/NeuroStorage.swift /Users/builder/clone/FlowApp/Neuro/NeuroTokenizer.swift /Users/builder/clone/FlowApp/Neuro/NeuroVectorMath.swift /Users/builder/clone/FlowApp/UI/Onboarding/OnboardingView.swift /Users/builder/clone/FlowApp/UI/Search/SearchView.swift /Users/builder/clone/FlowApp/UI/Settings/SettingsView.swift /Users/builder/clone/FlowApp/Player/SponsorBlockService.swift /Users/builder/clone/FlowApp/UI/Sync/SyncView.swift /Users/builder/clone/FlowApp/Models/VideoItem.swift /Users/builder/clone/FlowApp/UI/Player/VideoPlayerView.swift /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Symbols.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreText.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Metal.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/QuartzCore.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_DarwinFoundation1.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreImage.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/UniformTypeIdentifiers.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreGraphics.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreMIDI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Swift.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/LocalAuthentication.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/AVFAudio.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreData.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_DarwinFoundation2.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_StringProcessing.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/os.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/UIKit.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/XPC.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/SwiftUICore.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreTransferable.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/simd.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Accessibility.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/OSLog.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreFoundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/MediaPlayer.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CryptoKit.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreVideo.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_DarwinFoundation3.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/AudioToolbox.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Spatial.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/FileProvider.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/DataDetection.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/System.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/DeveloperToolsSupport.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Dispatch.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Network.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_Builtin_float.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Darwin.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Observation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/SwiftUI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Combine.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/_Concurrency.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Synchronization.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/ObjectiveC.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/AVFoundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Foundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/Distributed.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreAudio.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode-26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.4/CoreMedia.swiftmodule/arm64e-apple-ios.swiftmodule /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_stdint-1SGX95Z6B3PK77PF6HF117DAJ.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreImage-13JOKKM3JR6R35K2V2AQ5HUA2.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/SwiftShims-20U8HZT03CXWYH1Y24SPRRO86.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/ObjectiveC-E96U2YUDF88UYXHV80XJG50DL.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/UIKit-AC2O1GOB31EYMVTEDZQ0RM7ZA.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_stdbool-1ZWAXERWTFLZB46ABB9Z9I71L.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreMIDI-48RPJ1Y02X5JO49A1G9YOWLYY.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/SwiftUICore-74NLN24F1O4QAMMMZBI1U2F06.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Foundation-1NB0K6O7BK1P3DSEY1DOSHTJO.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_SwiftConcurrencyShims-D1WP8LINFX3RY9PE76HHLQYCL.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/os_workgroup-41PW36WMYE944CF9AJW4U6QRU.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/LocalAuthentication-ENBZ7TQMOA5PFJCO921TQXOXZ.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/IOSurface-6TBDCXMQDPKNENLEKK428KA2L.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreMedia-2KWS7GRFVPTF3ZYFBYP8CN2RA.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_float-1A35KG4DT15TOCL4KZYIQYLV2.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreAudio-9M2OYEX9XBNTBPUJP0Y3QJQD6.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_stdatomic-5URG6AD8QS6TOMC65X6OLMS37.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreVideo-CJ676VR87EISVTUJ7LT4AEPKE.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/OSLog-80TWO2SKDDCTNM9VCZWJFGBVH.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/DeveloperToolsSupport-9LHO0U2EPA2KV2FDX9Z8BY8SZ.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreGraphics-75TW0GMHAV84ESBXM4VRR0R96.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/simd-2DNQZOXX0R162DEPIR87YTGUE.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/OpenGLES-3965I0SR2GKTMQUMOG57GRBBI.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_inttypes-1EW1XNQSW8HX78W8NA87CXCYG.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/os_object-CTTOBHFXVDXOQMCU49ZGFPAV0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_tgmath-ANMMIGNM4FNCV3DGR7HYXPXOS.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CFNetwork-2N90X7KTRPCC57IH6ASYXY0NB.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/AVFoundation-4L21WXB6L0GGG0BENZ25MAQET.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/UniformTypeIdentifiers-DUOBWU32AJ38XUROFDLMCQIU.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Accessibility-9Y35GAAU4C83PL5MZF3B3M8QF.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_DarwinFoundation2-2HSEQCBOLAI27MPGYNHDJNZXP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_AvailabilityInternal-907FUC3QD0ZN450UC5W1ATD35.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Symbols-DBTU0M7KNGZNFA2FPLDS7CFBQ.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/UIUtilities-5DP9KM8M3KRY0MZ1VDZNXYPHC.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/FileProvider-5YAX98KZISNL63RWDTDJSZZHM.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/MediaToolbox-DVQHXX7PCEJEA0MQN6A5220JX.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/dnssd-6O8AX8HTHUZFGTGGFNP4ZR04Z.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_limits-EATBSMG48VL4OEZRR4SUF04I0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/SwiftUI-4X1674Q8B2GFZDS68ZV2SATP0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreAudioTypes-8DT8OQ9W8W67O9VHG2JS4CIBO.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Network-4S4BSOIYCBCJWSEBEE4WGWRNG.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/os-41WCK2CHIAEPXRHRFU8L8DGPQ.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/MediaPlayer-1X404Y9ZZM3LBWFHKVZFCNNQC.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_stdarg-34SJRE5W64CQ5EOY3XOJGE1CA.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreText-7NRB5IDZ2PKFC9SP0UQV35NDV.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreFoundation-AGD9IZIEU8FM6FU41JX1KOK6Z.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/ImageIO-79OL1POSX7G74N0DPXTMATXZ4.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_DarwinFoundation1-3OJL0QG9AYDPWGTIA29HPGSEM.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Dispatch-2MJY3O358IFAQOHNEAWJ1W8GP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/MachO-AUOQPGT30JMUKGOP75TPNU13S.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/ptrauth-8L48MMYFIUCQNPZD7LZCI6TG0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Spatial-8490LWZ4LRMY464D42FXHBMH0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/XPC-128APPS6G4EHQ4GW4RB1EBSXP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/AudioToolbox-D4EW49QL9HFZBK7B7170HU6K0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/DataDetection-WK5JXDVE6HNBFQIGBON089OP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/QuartzCore-CO4UVQ5X433N2EDLIA8VJPYHU.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/AVFAudio-5E8CX8CJHBU26W7WIGI49JXVM.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/sys_types-4PQ0Y7AI3UI9TJIN86M5PBD5V.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreData-97GS1UKXX2YL2CVW8677LJ0EP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Security-787LF2Q8PGJ7ZP4WHS4P14XXP.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/AVRouting-1DR8GD194WZ7KVA6GLB485VV0.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/ptrcheck-98XXT2XKY1J9DB5J6A13C080P.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Metal-CYN93M5GJNB9H5EAUF4U7NJHC.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_intrinsics-3WTU5D4PXC041J9HD0YJEH050.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_Builtin_stddef-1X2IMQ9CONXQHP369BGMJTAYR.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/CoreTransferable-EMFPLYIJMTAN3L1V8149D29SH.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/_DarwinFoundation3-4XXVSI4M9OW2ASU0VYCINJ0BF.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/UserNotifications-B9ZQETTEGH9ACKUBUO5C2BAE4.pcm /Users/builder/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Darwin-BXUMCU9MMVFCFHBO00WLV2W4Z.pcm /Users/builder/Library/Developer/Xcode/DerivedData/Flow-figouljkcpilvxabuixejqgrewhj/Build/Intermediates.noindex/Flow.build/Release-iphoneos/Flow.build/Objects-normal/arm64/Flow-dependencies-1.json (in target 'Flow' from project 'Flow')
+	Building project Flow with scheme Flow and configuration Release
+(3 failures)
+
+
+Build failed :|
+Step 4 script `Build Unsigned App` exited with status code 65

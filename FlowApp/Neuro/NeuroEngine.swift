@@ -639,6 +639,15 @@ final class NeuroEngine {
         return result
     }
 
+    // ── Watch History Update ──
+    func updateWatchHistoryMap(videoId: String, percent: Float) {
+        brainQueue.async { [weak self] in
+            guard let self else { return }
+            self.brain.watchHistoryMap[videoId] = percent
+            self.scheduleSave()
+        }
+    }
+
     private func updateAffinities(videoVector: ContentVector, isPositive: Bool) {
         let top = videoVector.topics.sorted { $0.value > $1.value }.prefix(3).map(\.key)
         guard top.count >= 2 else { return }

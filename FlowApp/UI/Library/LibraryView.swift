@@ -52,20 +52,22 @@ struct HistoryTab: View {
     @Environment(FlowAVPlayer.self) private var player
 
     var body: some View {
-        if neuro.watchHistory.isEmpty {
+        let historyKeys = Array(neuro.brain.watchHistoryMap.keys)
+        
+        if historyKeys.isEmpty {
             emptyState(icon: "clock", message: "Your watch history will appear here")
         } else {
             ScrollView {
                 LazyVStack(spacing: FlowTheme.Spacing.xs) {
-                    ForEach(neuro.watchHistory.reversed()) { event in
-                        HistoryRow(event: event) {
-                            // Re-play from history — need a VideoItem stub
+                    ForEach(historyKeys, id: \.self) { videoID in
+                        let pct = neuro.brain.watchHistoryMap[videoID] ?? 0
+                        HistoryRow(videoID: videoID, watchedFraction: CGFloat(pct)) {
                             let v = VideoItem(
-                                id: event.videoID,
-                                title: event.title,
-                                channelName: event.channelName,
-                                channelID: event.channelID,
-                                thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(event.videoID)/hqdefault.jpg"),
+                                id: videoID,
+                                title: "Video \(videoID)",
+                                channelName: "Channel",
+                                channelID: "",
+                                thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"),
                                 duration: nil,
                                 viewCount: nil,
                                 publishedAt: nil,
@@ -82,14 +84,15 @@ struct HistoryTab: View {
 }
 
 struct HistoryRow: View {
-    let event: WatchEvent
+    let videoID: String
+    let watchedFraction: CGFloat
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: FlowTheme.Spacing.md) {
                 ZStack(alignment: .bottomTrailing) {
-                    AsyncImage(url: URL(string: "https://i.ytimg.com/vi/\(event.videoID)/hqdefault.jpg")) {
+                    AsyncImage(url: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")) {
                         $0.resizable().aspectRatio(16/9, contentMode: .fill)
                     } placeholder: {
                         Rectangle().fill(FlowTheme.Colors.outline)
@@ -101,23 +104,20 @@ struct HistoryRow: View {
                     GeometryReader { _ in
                         Rectangle()
                             .fill(FlowTheme.Colors.primary)
-                            .frame(width: 100 * event.watchedFraction, height: 3)
+                            .frame(width: 100 * watchedFraction, height: 3)
                     }
                     .frame(width: 100, height: 3)
                     .alignmentGuide(.bottom) { d in d[.bottom] }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(event.title)
+                    Text("Video \(videoID)")
                         .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
-                    Text(event.channelName)
+                    Text("Watched \((watchedFraction * 100).formatted(.number.precision(.fractionLength(0))))%")
                         .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                    Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
-                        .font(FlowTheme.Typography.labelSmall)
-                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.6))
                 }
                 Spacer()
             }

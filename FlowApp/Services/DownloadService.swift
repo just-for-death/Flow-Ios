@@ -22,7 +22,8 @@ final class DownloadService: NSObject {
     static let shared = DownloadService()
 
     private(set) var activeTasks: [String: DownloadTask] = [:]
-    private var metadataStore: [String: DownloadTask] = [:]
+    private(set) var metadataStore: [String: DownloadTask] = [:]
+    var backgroundCompletionHandler: (() -> Void)?
     private var urlSession: URLSession!
 
     private override init() {

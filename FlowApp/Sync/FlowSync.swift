@@ -382,12 +382,13 @@ final class FlowSyncProtocol {
                 (col, SyncCapability(schema: 1, produce: true, consume: true))
             }, uniquingKeysWith: { a, _ in a }
         ))
-        return if !isHost {
-            { try await sendFrame(type: FrameType.capabilities, value: local) }() == ()
-            ? try decode(SyncCapabilities.self, from: try await expectFrame(type: FrameType.capabilities))
-            : local
+        if !isHost {
+            try await sendFrame(type: FrameType.capabilities, value: local)
+            return try decode(SyncCapabilities.self, from: try await expectFrame(type: FrameType.capabilities))
         } else {
-            { let p = try await expectFrame(type: FrameType.capabilities); try await sendFrame(type: FrameType.capabilities, value: local); return try decode(SyncCapabilities.self, from: p) }()
+            let p = try await expectFrame(type: FrameType.capabilities)
+            try await sendFrame(type: FrameType.capabilities, value: local)
+            return try decode(SyncCapabilities.self, from: p)
         }
     }
 
@@ -575,11 +576,11 @@ final class SyncManager {
 
     func generateQRPayload(listeningPort: UInt16) -> QRPayload {
         let sid = FlowSyncCrypto.randomSessionID()
-        let key = FlowSyncCrypto.generateMasterKey()
+        let key = FlowSyncCrypto.randomMasterKey()
         return QRPayload(
             v: 1,
-            sid: sid.base64URLEncodedString(),
-            k: key.base64URLEncodedString(),
+            sid: sid.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""),
+            k: key.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""),
             ip: getLocalIPAddress() ?? "0.0.0.0",
             p: listeningPort,
             d: UIDevice.current.name.prefix(64).description,
@@ -610,9 +611,10 @@ final class SyncManager {
     func syncWithPeer(host: String, port: UInt16, masterKey: Data, sessionID: Data? = nil, isHost: Bool, role: FlowSyncProtocol.Role) async {
         state = .connecting
         let sid = sessionID ?? FlowSyncCrypto.randomSessionID()
+        let deviceName = await MainActor.run { UIDevice.current.name }
         let hello     = SyncHello(
             deviceId:   UIDevice.current.identifierForVendor?.uuidString ?? "ios-\(UUID().uuidString)",
-            deviceName: UIDevice.current.name,
+            deviceName: deviceName,
             platform:   "iOS",
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             protocol:   1
@@ -630,7 +632,7 @@ final class SyncManager {
             self?.state = .syncing(progress: Double(done) / Double(max(1, total)))
         }
         proto.confirmSAS = { [weak self] sas in
-            await MainActor.run { self?.sasCode = sas }
+            await MainActor.run { [weak self] in self?.sasCode = sas }
             // Wait for user to confirm
             return await self?.awaitSASConfirmation() ?? false
         }
@@ -655,7 +657,7 @@ final class SyncManager {
         } catch {
             state = .failed(error)
         }
-        connection.close()
+        await connection.close()
     }
 
     // MARK: - Payload building (serialize local data to NDJSON lines)
@@ -742,14 +744,12 @@ final class SyncManager {
                 for line in lines {
                     if let data = line.data(using: .utf8),
                        let entry = try? JSONDecoder().decode([String: AnyCodable].self, from: data),
-                       let videoId = entry["videoId"]?.value as? String,
-                       let pct = entry["pct"]?.value as? Double {
-                        if NeuroEngine.shared.brain.watchHistoryMap[videoId] == nil {
-                            NeuroEngine.shared.brain.watchHistoryMap[videoId] = Float(pct)
+                       let videoId = entry["videoId"]?.value as? String {
+                            let pct = (entry["pct"]?.value as? Double ?? 0.0) / 100.0
+                            NeuroEngine.shared.updateWatchHistoryMap(videoId: videoId, percent: Float(pct))
                             added += 1
                         }
                     }
-                }
                 stats[collection] = SyncApplyStats(added: added, updated: 0, skipped: lines.count - added, tombstoned: 0)
 
             case SyncCollection.settings:

@@ -47,6 +47,8 @@ final class AppRouter {
     var activeMusicID: String? = nil
 }
 
+import AVFoundation
+
 // MARK: - AudioSessionManager
 enum AudioSessionManager {
     static func configure() {
@@ -54,7 +56,7 @@ enum AudioSessionManager {
             try AVAudioSession.sharedInstance().setCategory(
                 .playback,
                 mode: .moviePlayback,
-                options: [.allowAirPlay, .allowBluetooth]
+                options: [.allowAirPlay, .allowBluetoothA2DP]
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {

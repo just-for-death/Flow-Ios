@@ -1,6 +1,7 @@
 import AVFoundation
 import MediaPlayer
 import Combine
+import AVKit
 
 // MARK: - FlowAVPlayer
 /// Singleton AVPlayer wrapper.
@@ -64,9 +65,14 @@ final class FlowAVPlayer: NSObject {
                 
                 // Stub stream info for UI
                 self.streamInfo = StreamInfo(
-                    videoURL: nil, audioURL: nil, fallbackURL: url,
-                    duration: video.duration ?? item.asset.duration.seconds,
-                    format: "mp4", quality: "local", isMusic: false, thumbnailURL: video.thumbnailURL
+                    videoURL: nil,
+                    audioURL: nil,
+                    fallbackURL: url,
+                    formats: [],
+                    duration: Double(video.duration ?? Int(item.asset.duration.seconds)),
+                    title: video.title,
+                    channelName: video.channelName,
+                    thumbnailURL: video.thumbnailURL
                 )
                 self.updateNowPlayingInfo(video: video, stream: self.streamInfo!)
                 return
