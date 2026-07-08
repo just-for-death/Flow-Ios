@@ -26,6 +26,7 @@ enum FlowTheme {
 
         /// Error
         static let error            = Color(hex: "#CF6679")
+        static let errorContainer   = Color(hex: "#3E1B23")
 
         /// Outline
         static let outline          = Color(hex: "#3A3A5C")

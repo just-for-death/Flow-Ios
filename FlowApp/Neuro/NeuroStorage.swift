@@ -12,18 +12,12 @@ final class NeuroStorage {
         return flowDir.appendingPathComponent("neuro_brain.json")
     }()
 
-    private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.outputFormatting = [.sortedKeys]
-        return e
-    }()
-    private let decoder = JSONDecoder()
-
     func load() async -> UserBrain? {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .utility).async { [self] in
-                guard let data = try? Data(contentsOf: fileURL),
-                      let brain = try? decoder.decode(UserBrain.self, from: data) else {
+        let url = fileURL
+        return await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .utility).async {
+                guard let data = try? Data(contentsOf: url),
+                      let brain = try? JSONDecoder().decode(UserBrain.self, from: data) else {
                     cont.resume(returning: nil); return
                 }
                 cont.resume(returning: brain)
@@ -32,9 +26,12 @@ final class NeuroStorage {
     }
 
     func save(_ brain: UserBrain) {
-        DispatchQueue.global(qos: .utility).async { [self] in
+        let url = fileURL
+        DispatchQueue.global(qos: .utility).async {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
             guard let data = try? encoder.encode(brain) else { return }
-            try? data.write(to: fileURL, options: .atomic)
+            try? data.write(to: url, options: .atomic)
         }
     }
 

@@ -2,6 +2,21 @@ import Foundation
 import CryptoKit
 import Network
 
+// MARK: - Extensions
+extension String {
+    func base64URLDecodedData() -> Data? {
+        var base64 = self
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        
+        let paddingLength = (4 - base64.count % 4) % 4
+        if paddingLength > 0 {
+            base64.append(String(repeating: "=", count: paddingLength))
+        }
+        
+        return Data(base64Encoded: base64)
+    }
+}
 // MARK: - FLOW-SYNC/1 Cryptography
 /// Byte-exact Swift port of Android SyncCrypto.kt.
 /// Interoperable with Android (AES-256-GCM, HKDF-SHA256, HMAC-SHA256 SAS).

@@ -35,7 +35,7 @@ final class SponsorBlockService {
     func fetchSegments(videoID: String) async throws -> [SponsorSegment] {
         guard isEnabled else { return [] }
 
-        let cats = enabledCategories.map(\.rawValue).joined(separator: ",")
+
         var comps = URLComponents(string: "\(baseURL)/skipSegments")!
         comps.queryItems = [
             URLQueryItem(name: "videoID",    value: videoID),
