@@ -79,7 +79,7 @@ struct HomeView: View {
             ForEach(vm.videos) { video in
                 VideoCard(video: video) {
                     player.play(video: video)
-                    neuro.recordWatch(video: video, watchedFraction: 0) // will update as video plays
+                    neuro.onVideoInteraction(video: video, interaction: .watch, percentWatched: 0) // will update as video plays
                 }
                 .onAppear {
                     if video.id == vm.videos.last?.id {

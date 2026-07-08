@@ -158,11 +158,14 @@ struct SearchPage {
             throw InnerTubeError.parseError("SearchPage: invalid JSON")
         }
         var items: [SearchResultItem] = []
-        let contents = raw["contents"]?.dict?["twoColumnSearchResultsRenderer"]?.dict?
-            ["primaryContents"]?.dict?["sectionListRenderer"]?.dict?["contents"] as? [[String: Any]] ?? []
+        let twoCol = raw["contents"]?.dict?["twoColumnSearchResultsRenderer"]?.dict
+        let primary = twoCol?["primaryContents"]?.dict
+        let secList = primary?["sectionListRenderer"]?.dict
+        let contents = secList?["contents"] as? [[String: Any]] ?? []
 
         for section in contents {
-            let itemSection = section["itemSectionRenderer"]?.dict?["contents"] as? [[String: Any]] ?? []
+            let itemSectionDict = section["itemSectionRenderer"]?.dict
+            let itemSection = itemSectionDict?["contents"] as? [[String: Any]] ?? []
             for item in itemSection {
                 if let vr = item["videoRenderer"] as? [String: Any],
                    let video = VideoItem(videoRenderer: vr) {
@@ -187,7 +190,9 @@ struct NextPage {
             throw InnerTubeError.parseError("NextPage: invalid JSON")
         }
         var items: [VideoItem] = []
-        let results = raw["secondaryResults"]?.dict?["secondaryResults"]?.dict?["results"] as? [[String: Any]] ?? []
+        let secRes1 = raw["secondaryResults"]?.dict
+        let secRes2 = secRes1?["secondaryResults"]?.dict
+        let results = secRes2?["results"] as? [[String: Any]] ?? []
         for result in results {
             if let cvr = result["compactVideoRenderer"] as? [String: Any],
                let video = VideoItem(compactVideoRenderer: cvr) {
@@ -311,8 +316,12 @@ extension VideoItem {
         self.id          = id
         self.title       = (vr["title"] as? [String: Any])?["runs"] .asRuns ?? ""
         self.channelName = (vr["ownerText"] as? [String: Any])?["runs"].asRuns ?? ""
-        self.channelID   = ((vr["ownerText"] as? [String: Any])?["runs"] as? [[String: Any]])?
-            .first?["navigationEndpoint"]?.dict?["browseEndpoint"]?.dict?["browseId"] as? String ?? ""
+        let ownerText = vr["ownerText"] as? [String: Any]
+        let runs = ownerText?["runs"] as? [[String: Any]]
+        let firstRun = runs?.first
+        let nav = firstRun?["navigationEndpoint"]?.dict
+        let browse = nav?["browseEndpoint"]?.dict
+        self.channelID = browse?["browseId"] as? String ?? ""
         let thumbs = (vr["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]] ?? []
         self.thumbnailURL = thumbs.last.flatMap { $0["url"] as? String }.flatMap(URL.init)
         self.duration     = (vr["lengthText"] as? [String: Any])?["simpleText"].flatMap { ($0 as? String)?.durationSeconds }
