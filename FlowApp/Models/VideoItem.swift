@@ -133,13 +133,20 @@ struct HomeFeedPage {
         // Walk: contents → twoColumnBrowseResultsRenderer → tabs[0] → tabRenderer
         //       → content → richGridRenderer → contents → richItemRenderer → content → videoRenderer
         var items: [VideoItem] = []
-        let tabs = (raw["contents"] as? [String: Any])?["twoColumnBrowseResultsRenderer"]?
-            .dict?["tabs"] as? [[String: Any]] ?? []
-        let richContents = tabs.first?.dict?["tabRenderer"]?.dict?["content"]?.dict?
-            ["richGridRenderer"]?.dict?["contents"] as? [[String: Any]] ?? []
+        let rawContents = raw["contents"] as? [String: Any]
+        let twoCol = rawContents?["twoColumnBrowseResultsRenderer"]?.dict
+        let tabs = twoCol?["tabs"] as? [[String: Any]] ?? []
+        
+        let firstTab = tabs.first?.dict
+        let tabRenderer = firstTab?["tabRenderer"]?.dict
+        let content = tabRenderer?["content"]?.dict
+        let richGrid = content?["richGridRenderer"]?.dict
+        let richContents = richGrid?["contents"] as? [[String: Any]] ?? []
 
         for entry in richContents {
-            if let vr = entry["richItemRenderer"]?.dict?["content"]?.dict?["videoRenderer"] as? [String: Any] {
+            let richItem = entry["richItemRenderer"]?.dict
+            let itemContent = richItem?["content"]?.dict
+            if let vr = itemContent?["videoRenderer"] as? [String: Any] {
                 if let item = VideoItem(videoRenderer: vr) { items.append(item) }
             }
         }
