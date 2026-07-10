@@ -41,6 +41,13 @@
     <array>
         <string>audio</string>
         <string>fetch</string>
+        <string>processing</string>
+    </array>
+
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>io.github.aedev.flow.subscription-check</string>
+        <string>io.github.aedev.flow.auto-backup</string>
     </array>
 
     <!-- Picture in Picture -->

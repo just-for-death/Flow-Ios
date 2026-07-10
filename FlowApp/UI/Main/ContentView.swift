@@ -29,7 +29,7 @@ struct ContentView: View {
                         mainContent
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
-                        if player.currentVideo != nil && !showingPlayer {
+                        if player.currentVideo != nil && !showingPlayer && selectedTab != .shorts {
                             MiniPlayerBar(onTap: { showingPlayer = true })
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
@@ -42,7 +42,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     VStack(spacing: 0) {
-                        if player.currentVideo != nil && !showingPlayer {
+                        if player.currentVideo != nil && !showingPlayer && selectedTab != .shorts {
                             MiniPlayerBar(onTap: { showingPlayer = true })
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }

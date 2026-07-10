@@ -89,7 +89,7 @@ enum PoTokenJavaScriptUtil {
         let pad = (4 - b64.count % 4) % 4
         if pad > 0 { b64.append(String(repeating: "=", count: pad)) }
         guard let data = Data(base64Encoded: b64) else { return scrambled }
-        let shifted = data.map { UInt8(Int($0) + 97) }
+        let shifted = data.map { $0 &+ 97 }
         return String(bytes: shifted, encoding: .utf8) ?? scrambled
     }
 

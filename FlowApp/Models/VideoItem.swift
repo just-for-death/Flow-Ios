@@ -65,6 +65,51 @@ struct StreamFormat: Identifiable, Hashable {
     let fps: Int?
 }
 
+/// Pure stream-selection logic extracted for testing and reuse.
+enum StreamInfoSelection {
+    struct Result {
+        let fallbackURL: URL?
+        let videoURL: URL?
+        let audioURL: URL?
+    }
+
+    static func classify(
+        muxResolved: [(format: PlayerResponse.StreamingData.Format, url: URL)],
+        adaptiveResolved: [(format: PlayerResponse.StreamingData.Format, url: URL)],
+        preferredQuality: String? = nil
+    ) -> Result {
+        let sortByBitrate: ([(format: PlayerResponse.StreamingData.Format, url: URL)]) -> [(format: PlayerResponse.StreamingData.Format, url: URL)] = {
+            $0.sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+        }
+        let target = qualityRank(preferredQuality)
+        let mux = sortByBitrate(muxResolved)
+        let videos = sortByBitrate(adaptiveResolved.filter { $0.format.isVideo })
+        let audios = sortByBitrate(adaptiveResolved.filter { $0.format.isAudio })
+        return Result(
+            fallbackURL: pick(atOrBelow: target, from: mux)?.url ?? mux.first?.url,
+            videoURL: pick(atOrBelow: target, from: videos)?.url ?? videos.first?.url,
+            audioURL: audios.first?.url
+        )
+    }
+
+    private static func qualityRank(_ label: String?) -> Int {
+        guard let label else { return 0 }
+        let digits = label.filter(\.isNumber)
+        return Int(digits) ?? 0
+    }
+
+    private static func pick(
+        atOrBelow target: Int,
+        from entries: [(format: PlayerResponse.StreamingData.Format, url: URL)]
+    ) -> (format: PlayerResponse.StreamingData.Format, url: URL)? {
+        guard target > 0 else { return entries.first }
+        let sorted = entries.sorted {
+            qualityRank($0.format.qualityLabel) > qualityRank($1.format.qualityLabel)
+        }
+        return sorted.first { qualityRank($0.format.qualityLabel) <= target } ?? sorted.last
+    }
+}
+
 // MARK: - SponsorSegment (used by FlowProgressBar + SponsorBlockService)
 struct SponsorSegment: Identifiable, Codable {
     let id: String
@@ -126,41 +171,60 @@ struct HomeFeedPage {
     let videos: [VideoItem]
     let continuation: String?
 
+    init(videos: [VideoItem], continuation: String?) {
+        self.videos = videos
+        self.continuation = continuation
+    }
+
     init(json: Data) throws {
         guard let raw = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else {
             throw InnerTubeError.parseError("HomeFeedPage: invalid JSON")
         }
         var items: [VideoItem] = []
-        if let rawContents = raw["contents"] as? [String: Any],
-           let twoCol = rawContents["twoColumnBrowseResultsRenderer"] as? [String: Any],
-           let tabs = twoCol["tabs"] as? [[String: Any]],
-           let firstTab = tabs.first,
-           let tabRenderer = firstTab["tabRenderer"] as? [String: Any],
-           let content = tabRenderer["content"] as? [String: Any],
-           let richGrid = content["richGridRenderer"] as? [String: Any],
-           let richContents = richGrid["contents"] as? [[String: Any]] {
+        Self.extractVideos(from: raw, into: &items)
+        var seen = Set<String>()
+        items = items.filter { seen.insert($0.id).inserted }
+        self.videos = items
+        self.continuation = Self.findContinuation(in: raw)
+    }
 
-            for entry in richContents {
-                if let richItem = entry["richItemRenderer"] as? [String: Any],
-                   let itemContent = richItem["content"] as? [String: Any],
-                   let vr = itemContent["videoRenderer"] as? [String: Any] {
-                    if let item = VideoItem(videoRenderer: vr) { items.append(item) }
-                }
+    private static func extractVideos(from any: Any, into items: inout [VideoItem]) {
+        if let dict = any as? [String: Any] {
+            if let vr = dict["videoRenderer"] as? [String: Any],
+               let item = VideoItem(videoRenderer: vr) {
+                items.append(item)
             }
-            
-            if let lastRichContent = richContents.last,
-               let contItem = lastRichContent["continuationItemRenderer"] as? [String: Any],
+            if let cvr = dict["compactVideoRenderer"] as? [String: Any],
+               let item = VideoItem(compactVideoRenderer: cvr) {
+                items.append(item)
+            }
+            for value in dict.values {
+                extractVideos(from: value, into: &items)
+            }
+        } else if let array = any as? [Any] {
+            for value in array {
+                extractVideos(from: value, into: &items)
+            }
+        }
+    }
+
+    private static func findContinuation(in any: Any) -> String? {
+        if let dict = any as? [String: Any] {
+            if let contItem = dict["continuationItemRenderer"] as? [String: Any],
                let contEndpoint = contItem["continuationEndpoint"] as? [String: Any],
                let contCommand = contEndpoint["continuationCommand"] as? [String: Any],
                let token = contCommand["token"] as? String {
-                self.continuation = token
-            } else {
-                self.continuation = nil
+                return token
             }
-        } else {
-            self.continuation = nil
+            for value in dict.values {
+                if let found = findContinuation(in: value) { return found }
+            }
+        } else if let array = any as? [Any] {
+            for value in array {
+                if let found = findContinuation(in: value) { return found }
+            }
         }
-        self.videos = items
+        return nil
     }
 }
 
@@ -322,7 +386,7 @@ struct PlayerResponse: Decodable {
     }
 
     /// Resolves to a StreamInfo, picking best quality streams with URL deciphering.
-    func toStreamInfo(videoID: String? = nil) async throws -> StreamInfo {
+    func toStreamInfo(videoID: String? = nil, preferredQuality: String? = nil) async throws -> StreamInfo {
         guard playabilityStatus?.status == "OK" || playabilityStatus == nil else {
             throw InnerTubeError.parseError(playabilityStatus?.reason ?? "Video unavailable")
         }
@@ -353,16 +417,12 @@ struct PlayerResponse: Decodable {
             throw InnerTubeError.noStreamsAvailable
         }
 
-        let sortByBitrate: ([(format: StreamingData.Format, url: URL)]) -> [(format: StreamingData.Format, url: URL)] = {
-            $0.sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
-        }
-
-        // Progressive streams from `formats` — video+audio muxed in one file.
-        let muxStreams = sortByBitrate(muxResolved)
-
-        // Adaptive DASH — separate video-only and audio-only tracks.
-        let videoStreams = sortByBitrate(adaptiveResolved.filter { $0.format.isVideo })
-        let audioStreams = sortByBitrate(adaptiveResolved.filter { $0.format.isAudio })
+        let quality = preferredQuality ?? PlayerPreferences.shared.preferredQuality
+        let selection = StreamInfoSelection.classify(
+            muxResolved: muxResolved,
+            adaptiveResolved: adaptiveResolved,
+            preferredQuality: quality
+        )
 
         let duration = Double(videoDetails?.lengthSeconds ?? "0") ?? 0
         let thumbURL = videoDetails?.thumbnailUrl.flatMap { URL(string: $0) }
@@ -381,9 +441,9 @@ struct PlayerResponse: Decodable {
         }
 
         return StreamInfo(
-            videoURL:    videoStreams.first?.url,
-            audioURL:    audioStreams.first?.url,
-            fallbackURL: muxStreams.first?.url,
+            videoURL:    selection.videoURL,
+            audioURL:    selection.audioURL,
+            fallbackURL: selection.fallbackURL,
             formats:     formats,
             duration:    duration,
             title:       videoDetails?.title ?? "",

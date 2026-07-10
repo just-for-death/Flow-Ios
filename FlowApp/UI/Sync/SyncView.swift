@@ -34,6 +34,13 @@ struct SyncView: View {
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                 }
             }
+            .overlay {
+                if !sync.pendingConsentCollections.isEmpty {
+                    SyncConsentView()
+                        .padding(FlowTheme.Spacing.lg)
+                        .background(.ultraThinMaterial)
+                }
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -173,6 +180,10 @@ struct SyncHostQRView: View {
             if !sync.sasCode.isEmpty {
                 SASConfirmView()
             }
+
+            if !sync.pendingConsentCollections.isEmpty {
+                SyncConsentView()
+            }
         }
         .padding(FlowTheme.Spacing.xl)
         .onAppear {
@@ -241,6 +252,58 @@ struct SASConfirmView: View {
 
                 Button("Confirm") {
                     sync.confirmSAS(true)
+                }
+                .font(FlowTheme.Typography.labelLarge)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(FlowTheme.Spacing.sm)
+                .background(FlowTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+            }
+        }
+        .padding(FlowTheme.Spacing.md)
+        .background(FlowTheme.Colors.surfaceVariant)
+        .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
+    }
+}
+
+// MARK: - Sync consent
+struct SyncConsentView: View {
+    @Environment(SyncManager.self) private var sync
+
+    var body: some View {
+        VStack(spacing: FlowTheme.Spacing.md) {
+            Text("Accept Incoming Data?")
+                .font(FlowTheme.Typography.titleMedium)
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+
+            Text("The other device wants to merge these collections into this device:")
+                .font(FlowTheme.Typography.bodySmall)
+                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.xs) {
+                ForEach(sync.pendingConsentCollections, id: \.self) { collection in
+                    Label(SyncCollection.displayName(for: collection), systemImage: "checkmark.circle")
+                        .font(FlowTheme.Typography.bodyMedium)
+                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: FlowTheme.Spacing.md) {
+                Button("Decline") {
+                    sync.confirmConsent(false)
+                }
+                .font(FlowTheme.Typography.labelLarge)
+                .foregroundStyle(FlowTheme.Colors.error)
+                .frame(maxWidth: .infinity)
+                .padding(FlowTheme.Spacing.sm)
+                .background(FlowTheme.Colors.errorContainer)
+                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+
+                Button("Accept") {
+                    sync.confirmConsent(true)
                 }
                 .font(FlowTheme.Typography.labelLarge)
                 .foregroundStyle(.white)

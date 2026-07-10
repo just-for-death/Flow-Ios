@@ -19,6 +19,8 @@ struct SettingsView: View {
 
     // Player
     @AppStorage("prefQuality")    var prefQuality:    String = "1080p"
+    @AppStorage("contentLanguage") var contentLanguage: String = "en"
+    @AppStorage("contentRegion")   var contentRegion:   String = "US"
     @AppStorage("autoplay")       var autoplay:       Bool   = true
     @AppStorage("resumePlayback") var resumePlayback: Bool   = true
 
@@ -32,8 +34,55 @@ struct SettingsView: View {
                             Text($0).tag($0)
                         }
                     }
+                    .onChange(of: prefQuality) { _, v in PlayerPreferences.shared.preferredQuality = v }
                     Toggle("Autoplay Next Video", isOn: $autoplay)
                     Toggle("Resume Where You Left Off", isOn: $resumePlayback)
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                Section("Player & Network") {
+                    NavigationLink("Appearance") { AppearanceSettingsView() }
+                    NavigationLink("Player Appearance") { PlayerAppearanceSettingsView() }
+                    NavigationLink("Video Quality") { VideoQualitySettingsView() }
+                    NavigationLink("Buffer & Cache") { BufferSettingsView() }
+                    NavigationLink("Proxy") { ProxySettingsView() }
+                    NavigationLink("Shorts Player") { ShortsSettingsView() }
+                    NavigationLink("Downloads") { DownloadSettingsView() }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                Section("Content & Display") {
+                    NavigationLink("Content Display") { ContentSettingsView() }
+                    NavigationLink("Date & Time") { DateTimeSettingsView() }
+                    NavigationLink("Search History") { SearchHistorySettingsView() }
+                    NavigationLink("Time Management") { TimeManagementSettingsView() }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                Section("Data & Backup") {
+                    NavigationLink("Export Data") { ExportDataSettingsView() }
+                    NavigationLink("Auto Backup") { AutoBackupSettingsView() }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                Section("System") {
+                    NavigationLink("Notifications") { NotificationsSettingsView() }
+                    NavigationLink("Diagnostics") { DiagnosticsSettingsView() }
+                    NavigationLink("App Icon") { AppIconSettingsView() }
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
+                Section("Content") {
+                    Picker("Language", selection: $contentLanguage) {
+                        ForEach(["en", "es", "fr", "de", "ja", "ko", "pt", "hi"], id: \.self) { code in
+                            Text(code.uppercased()).tag(code)
+                        }
+                    }
+                    Picker("Region", selection: $contentRegion) {
+                        ForEach(["US", "GB", "CA", "AU", "IN", "DE", "FR", "JP", "BR"], id: \.self) {
+                            Text($0).tag($0)
+                        }
+                    }
                 }
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
 
@@ -101,7 +150,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Import from NewPipe")
                 } footer: {
-                    Text("Import subscriptions (JSON export) or watch history (newpipe.db).")
+                    Text("Import subscriptions (JSON export) or watch history (newpipe.db or ZIP).")
                 }
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
 
@@ -127,6 +176,7 @@ struct SettingsView: View {
                     Link("Source Code on GitHub",
                          destination: URL(string: "https://github.com/A-EDev/Flow")!)
                         .foregroundStyle(FlowTheme.Colors.primary)
+                    NavigationLink("Support Flow") { DonationsSettingsView() }
                     Link("License (GPL v3)",
                          destination: URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!)
                         .foregroundStyle(FlowTheme.Colors.primary)
@@ -172,7 +222,7 @@ struct ImportDataSection: View {
                 }
             }
         }
-        .fileImporter(isPresented: $showHistoryPicker, allowedContentTypes: [.data]) { result in
+        .fileImporter(isPresented: $showHistoryPicker, allowedContentTypes: [.data, .zip]) { result in
             if case .success(let url) = result {
                 Task {
                     let n = (try? await ImportService.importWatchHistoryDatabase(from: url)) ?? 0

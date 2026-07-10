@@ -164,6 +164,18 @@ enum SyncCollection {
 
     /// Collections iOS supports in v1
     static let iosSyncable = [watchHistory, playlists, likes, settings, flowNeuroBrain, subscriptions]
+
+    static func displayName(for collection: String) -> String {
+        switch collection {
+        case watchHistory:   return "Watch History"
+        case playlists:      return "Playlists"
+        case likes:          return "Liked Videos"
+        case settings:       return "Settings"
+        case flowNeuroBrain: return "FlowNeuro Brain"
+        case subscriptions:  return "Subscriptions"
+        default:             return collection.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
 }
 
 // MARK: - Wire message models (JSON)
@@ -559,6 +571,7 @@ final class SyncManager {
     var state: State = .idle
     var sasCode: String = ""
     var sasVerified: Bool = false
+    var pendingConsentCollections: [String] = []
 
     private init() {}
 
@@ -637,9 +650,11 @@ final class SyncManager {
             // Wait for user to confirm
             return await self?.awaitSASConfirmation() ?? false
         }
-        proto.confirmConsent = { collections in
-            // Auto-accept for now; can show a sheet
-            return true
+        proto.confirmConsent = { [weak self] collections in
+            await MainActor.run { [weak self] in
+                self?.pendingConsentCollections = collections
+            }
+            return await self?.awaitConsentConfirmation() ?? false
         }
 
         do {
@@ -683,12 +698,30 @@ final class SyncManager {
                 // Serialize user settings
                 let defaults = UserDefaults.standard
                 let prefQuality = defaults.string(forKey: "prefQuality") ?? "1080p"
+                let shortsQualityWifi = defaults.string(forKey: "shorts_quality_wifi") ?? "720p"
+                let shortsQualityCellular = defaults.string(forKey: "shorts_quality_cellular") ?? "480p"
+                let bufferProfile = defaults.string(forKey: "buffer_profile") ?? "STABLE"
+                let themeMode = defaults.string(forKey: "theme_mode") ?? "DARK"
+                let contentLanguage = defaults.string(forKey: "contentLanguage") ?? "en"
+                let contentRegion = defaults.string(forKey: "contentRegion") ?? "US"
                 let autoplay = defaults.bool(forKey: "autoplay")
                 let resumePlayback = defaults.bool(forKey: "resumePlayback")
                 let dict: [String: AnyCodable] = [
                     "prefQuality": AnyCodable(prefQuality),
+                    "shorts_quality_wifi": AnyCodable(shortsQualityWifi),
+                    "shorts_quality_cellular": AnyCodable(shortsQualityCellular),
+                    "buffer_profile": AnyCodable(bufferProfile),
+                    "theme_mode": AnyCodable(themeMode),
+                    "system_light_theme_mode": AnyCodable(defaults.string(forKey: "system_light_theme_mode") ?? "LIGHT"),
+                    "system_dark_theme_mode": AnyCodable(defaults.string(forKey: "system_dark_theme_mode") ?? "DARK"),
+                    "contentLanguage": AnyCodable(contentLanguage),
+                    "contentRegion": AnyCodable(contentRegion),
                     "autoplay": AnyCodable(autoplay),
-                    "resumePlayback": AnyCodable(resumePlayback)
+                    "resumePlayback": AnyCodable(resumePlayback),
+                    "notifications_enabled": AnyCodable(defaults.bool(forKey: "notifications_enabled")),
+                    "auto_backup_frequency": AnyCodable(defaults.string(forKey: "auto_backup_frequency") ?? "NONE"),
+                    "shorts_playback_mode": AnyCodable(defaults.string(forKey: "shorts_playback_mode") ?? "loop"),
+                    "media_cache_size_mb": AnyCodable(defaults.integer(forKey: "media_cache_size_mb"))
                 ]
                 if let data = try? encoder.encode(dict),
                    let jsonStr = String(data: data, encoding: .utf8) {
@@ -769,6 +802,22 @@ final class SyncManager {
                    let dict = try? JSONDecoder().decode([String: AnyCodable].self, from: data) {
                     let defaults = UserDefaults.standard
                     if let pq = dict["prefQuality"]?.value as? String { defaults.set(pq, forKey: "prefQuality"); updated += 1 }
+                    if let sq = dict["shorts_quality_wifi"]?.value as? String ?? dict["shortsQuality"]?.value as? String {
+                        defaults.set(sq, forKey: "shorts_quality_wifi"); updated += 1
+                    }
+                    if let sc = dict["shorts_quality_cellular"]?.value as? String {
+                        defaults.set(sc, forKey: "shorts_quality_cellular"); updated += 1
+                    }
+                    if let bp = dict["buffer_profile"]?.value as? String {
+                        defaults.set(bp, forKey: "buffer_profile"); updated += 1
+                    }
+                    if let tm = dict["theme_mode"]?.value as? String {
+                        defaults.set(tm, forKey: "theme_mode")
+                        ThemeManager.shared.themeMode = ThemeMode(rawValue: tm) ?? .dark
+                        updated += 1
+                    }
+                    if let hl = dict["contentLanguage"]?.value as? String { defaults.set(hl, forKey: "contentLanguage"); updated += 1 }
+                    if let gl = dict["contentRegion"]?.value as? String { defaults.set(gl, forKey: "contentRegion"); updated += 1 }
                     if let ap = dict["autoplay"]?.value as? Bool { defaults.set(ap, forKey: "autoplay"); updated += 1 }
                     if let rp = dict["resumePlayback"]?.value as? Bool { defaults.set(rp, forKey: "resumePlayback"); updated += 1 }
                 }
@@ -821,12 +870,25 @@ final class SyncManager {
         }
     }
 
+    private func awaitConsentConfirmation() async -> Bool {
+        return await withCheckedContinuation { [weak self] cont in
+            self?._consentContinuation = cont
+        }
+    }
+
     private var _sasContinuation: CheckedContinuation<Bool, Never>?
+    private var _consentContinuation: CheckedContinuation<Bool, Never>?
 
     func confirmSAS(_ confirmed: Bool) {
         sasVerified = confirmed
         _sasContinuation?.resume(returning: confirmed)
         _sasContinuation = nil
+    }
+
+    func confirmConsent(_ accepted: Bool) {
+        pendingConsentCollections = []
+        _consentContinuation?.resume(returning: accepted)
+        _consentContinuation = nil
     }
 }
 

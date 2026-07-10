@@ -179,6 +179,12 @@ struct SearchView: View {
 // MARK: - ChannelRow
 struct ChannelRow: View {
     let channel: ChannelItem
+    @Bindable private var subs = SubscriptionStore.shared
+
+    private var isSubscribed: Bool {
+        subs.channels.contains { $0.channelID == channel.id }
+    }
+
     var body: some View {
         HStack(spacing: FlowTheme.Spacing.md) {
             AsyncImage(url: channel.avatarURL) { img in
@@ -193,15 +199,28 @@ struct ChannelRow: View {
                 Text(channel.name)
                     .font(FlowTheme.Typography.titleSmall)
                     .foregroundStyle(FlowTheme.Colors.onSurface)
-                if let subs = channel.subscriberCount {
-                    Text(subs)
+                if let count = channel.subscriberCount {
+                    Text(count)
                         .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+
+            Button(isSubscribed ? "Subscribed" : "Subscribe") {
+                if isSubscribed {
+                    subs.unsubscribe(channelID: channel.id)
+                } else {
+                    subs.subscribe(ChannelSubscription(
+                        channelID: channel.id,
+                        channelName: channel.name,
+                        channelThumbnail: channel.avatarURL?.absoluteString ?? ""
+                    ))
+                }
+            }
+            .font(FlowTheme.Typography.labelMedium)
+            .foregroundStyle(isSubscribed ? FlowTheme.Colors.onSurfaceVariant : FlowTheme.Colors.primary)
+            .buttonStyle(.plain)
         }
         .padding(FlowTheme.Spacing.sm)
         .flowCard()

@@ -63,7 +63,7 @@ enum StreamURLResolver {
             forHTTPHeaderField: "User-Agent"
         )
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await AppProxyManager.shared.session.data(for: request)
         let html = String(data: data, encoding: .utf8) ?? ""
 
         let jsURLString: String? = {
@@ -84,7 +84,7 @@ enum StreamURLResolver {
             throw InnerTubeError.parseError("Could not resolve player JS URL")
         }
 
-        let (jsData, _) = try await URLSession.shared.data(from: jsURL)
+        let (jsData, _) = try await AppProxyManager.shared.session.data(from: jsURL)
         let source = String(data: jsData, encoding: .utf8) ?? ""
         guard !source.isEmpty else { throw InnerTubeError.parseError("Empty player JS") }
 
@@ -111,6 +111,12 @@ enum StreamURLResolver {
         }
         return URL(string: string, relativeTo: URL(string: "https://www.youtube.com")!)?.absoluteURL
     }
+
+    #if DEBUG
+    static func absoluteYouTubeURLForTesting(_ string: String) -> URL? {
+        absoluteYouTubeURL(string)
+    }
+    #endif
 
     private static func parseQueryString(_ query: String) -> [String: String] {
         var result: [String: String] = [:]

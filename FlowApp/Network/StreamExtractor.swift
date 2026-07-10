@@ -142,4 +142,28 @@ enum StreamExtractor {
 
         return hasVideo && hasAudio
     }
+
+    #if DEBUG
+    /// Races an async operation against a timeout — mirrors `fetchWithClient` behavior for unit tests.
+    static func raceForTesting<T>(
+        fetch: @escaping () async throws -> T,
+        timeoutSeconds: TimeInterval
+    ) async -> T? {
+        enum Race { case value(T); case timedOut }
+        return await withTaskGroup(of: Race.self) { group in
+            group.addTask {
+                do { return .value(try await fetch()) }
+                catch { return .timedOut }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                return .timedOut
+            }
+            guard let first = await group.next() else { return nil }
+            group.cancelAll()
+            if case .value(let v) = first { return v }
+            return nil
+        }
+    }
+    #endif
 }

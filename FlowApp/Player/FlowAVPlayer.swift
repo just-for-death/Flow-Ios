@@ -60,6 +60,7 @@ final class FlowAVPlayer: NSObject {
                 let loadedDuration = (try? await item.asset.load(.duration).seconds) ?? 0.0
                 self.duration = loadedDuration // Fallback duration
                 self.player.replaceCurrentItem(with: item)
+                self.applyBufferSettings(to: item)
                 self.observePlayerItem(item)
                 self.player.playImmediately(atRate: self.playbackRate)
                 self.isPlaying = true
@@ -91,9 +92,19 @@ final class FlowAVPlayer: NSObject {
 
                 let item: AVPlayerItem
                 
-                // Attempt to merge DASH video + audio into a single AVMutableComposition
+                // Attempt DASH merge; fall back to progressive mux if composition fails.
                 if let vURL = stream.videoURL, let aURL = stream.audioURL {
-                    item = try await createDASHPlayerItem(videoURL: vURL, audioURL: aURL)
+                    do {
+                        item = try await createDASHPlayerItem(videoURL: vURL, audioURL: aURL)
+                    } catch {
+                        if let fallback = stream.fallbackURL {
+                            item = AVPlayerItem(url: fallback)
+                        } else if let videoOnly = stream.videoURL {
+                            item = AVPlayerItem(url: videoOnly)
+                        } else {
+                            throw error
+                        }
+                    }
                 } else if let fallback = stream.fallbackURL {
                     item = AVPlayerItem(url: fallback)
                 } else {
@@ -101,6 +112,7 @@ final class FlowAVPlayer: NSObject {
                 }
 
                 player.replaceCurrentItem(with: item)
+                applyBufferSettings(to: item)
                 observePlayerItem(item)
                 player.playImmediately(atRate: playbackRate)
                 isPlaying = true
@@ -194,12 +206,24 @@ final class FlowAVPlayer: NSObject {
         Task { @MainActor in
             isLoading = true
             let item: AVPlayerItem
-            if format.mimeType.contains("audio"), let audioURL = streamInfo?.audioURL, let videoURL = streamInfo?.videoURL {
-                item = (try? await createDASHPlayerItem(videoURL: videoURL, audioURL: format.url)) ?? AVPlayerItem(url: format.url)
-            } else {
-                item = AVPlayerItem(url: format.url)
+            do {
+                if format.mimeType.contains("video"), let audioURL = streamInfo?.audioURL {
+                    // Adaptive video-only format — keep audio from current DASH stream.
+                    item = try await createDASHPlayerItem(videoURL: format.url, audioURL: audioURL)
+                } else if format.mimeType.contains("audio"), let videoURL = streamInfo?.videoURL {
+                    item = try await createDASHPlayerItem(videoURL: videoURL, audioURL: format.url)
+                } else {
+                    item = AVPlayerItem(url: format.url)
+                }
+            } catch {
+                if let fallback = streamInfo?.fallbackURL {
+                    item = AVPlayerItem(url: fallback)
+                } else {
+                    item = AVPlayerItem(url: format.url)
+                }
             }
             player.replaceCurrentItem(with: item)
+            applyBufferSettings(to: item)
             observePlayerItem(item)
             seek(to: savedTime)
             player.playImmediately(atRate: playbackRate)
@@ -256,6 +280,7 @@ final class FlowAVPlayer: NSObject {
     }
 
     private func observePlayerItem(_ item: AVPlayerItem) {
+        applyBufferSettings(to: item)
         itemObservations.forEach { $0.invalidate() }
         itemObservations = [
             item.observe(\.status) { [weak self] item, _ in
@@ -275,6 +300,12 @@ final class FlowAVPlayer: NSObject {
     @objc private func playerItemDidFinish() {
         isPlaying = false
         currentTime = 0
+    }
+
+    private func applyBufferSettings(to item: AVPlayerItem) {
+        let prefs = PlayerPreferences.shared
+        item.preferredForwardBufferDuration = prefs.preferredForwardBufferDuration
+        player.automaticallyWaitsToMinimizeStalling = prefs.bufferProfile != .aggressive
     }
 
     // MARK: - Lock screen / Control Center

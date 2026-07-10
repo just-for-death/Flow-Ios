@@ -129,6 +129,8 @@ extension DownloadService: URLSessionDownloadDelegate {
             self.metadataStore[videoID]?.progress = 1
             self.metadataStore[videoID]?.localURL = dest
             self.saveMetadata()
+            let title = self.metadataStore[videoID]?.title ?? videoID
+            Task { await NotificationService.shared.notifyDownloadComplete(title: title) }
         }
     }
 

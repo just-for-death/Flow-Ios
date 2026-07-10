@@ -38,6 +38,7 @@ targets:
     dependencies:
       - package: Kingfisher
       - package: GRDB
+      - package: ZIPFoundation
     scheme:
       testTargets:
         - FlowTests
@@ -61,3 +62,6 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
     from: "6.0.0"
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation
+    from: "0.9.19"

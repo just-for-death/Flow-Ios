@@ -6,34 +6,21 @@ import SwiftUI
 /// but expressed as Apple HIG / SwiftUI primitives.
 enum FlowTheme {
 
-    // MARK: Colors
+    // MARK: Colors — resolved from active theme palette
     enum Colors {
-        /// Primary brand color — deep indigo
-        static let primary          = Color(hex: "#7B61FF")
-        /// Lighter variant for backgrounds
-        static let primaryContainer = Color(hex: "#1E1B4B")
-        /// On-primary text / icon
-        static let onPrimary        = Color.white
-
-        /// Surface (card, sheet, player bar)
-        static let surface          = Color(hex: "#0F0F1A")
-        static let surfaceVariant   = Color(hex: "#1C1C2E")
-        static let onSurface        = Color(hex: "#E2E2F0")
-        static let onSurfaceVariant = Color(hex: "#A0A0BB")
-
-        /// Background
-        static let background       = Color(hex: "#0A0A12")
-
-        /// Error
-        static let error            = Color(hex: "#CF6679")
-        static let errorContainer   = Color(hex: "#3E1B23")
-
-        /// Outline
-        static let outline          = Color(hex: "#3A3A5C")
-        static let outlineVariant   = Color(hex: "#2A2A44")
-
-        /// SponsorBlock segment color
-        static let sponsorBlock     = Color(hex: "#00D37A")
+        static var primary:          Color { ThemeManager.shared.palette.primary }
+        static var primaryContainer: Color { ThemeManager.shared.palette.primaryContainer }
+        static var onPrimary:        Color { ThemeManager.shared.palette.onPrimary }
+        static var surface:          Color { ThemeManager.shared.palette.surface }
+        static var surfaceVariant:   Color { ThemeManager.shared.palette.surfaceVariant }
+        static var onSurface:        Color { ThemeManager.shared.palette.onSurface }
+        static var onSurfaceVariant: Color { ThemeManager.shared.palette.onSurfaceVariant }
+        static var background:       Color { ThemeManager.shared.palette.background }
+        static var error:            Color { ThemeManager.shared.palette.error }
+        static var errorContainer:   Color { ThemeManager.shared.palette.errorContainer }
+        static var outline:          Color { ThemeManager.shared.palette.outline }
+        static var outlineVariant:   Color { ThemeManager.shared.palette.outlineVariant }
+        static var sponsorBlock:     Color { ThemeManager.shared.palette.sponsorBlock }
     }
 
     // MARK: Typography

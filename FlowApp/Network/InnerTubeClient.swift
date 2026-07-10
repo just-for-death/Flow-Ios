@@ -42,8 +42,8 @@ struct InnerTubeContext: Encodable {
         InnerTubeContext(client: Client(
             clientName: "WEB",
             clientVersion: "2.20240101.00.00",
-            hl: Locale.current.language.languageCode?.identifier ?? "en",
-            gl: Locale.current.region?.identifier ?? "US",
+            hl: preferredHL,
+            gl: preferredGL,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             visitorData: visitorData
         ))
@@ -53,8 +53,8 @@ struct InnerTubeContext: Encodable {
         InnerTubeContext(client: Client(
             clientName: "ANDROID",
             clientVersion: "19.09.37",
-            hl: Locale.current.language.languageCode?.identifier ?? "en",
-            gl: Locale.current.region?.identifier ?? "US",
+            hl: preferredHL,
+            gl: preferredGL,
             userAgent: nil,
             visitorData: visitorData
         ))
@@ -126,11 +126,21 @@ struct InnerTubeContext: Encodable {
         InnerTubeContext(client: Client(
             clientName: "TVHTML5",
             clientVersion: "7.20230405.08.01",
-            hl: Locale.current.language.languageCode?.identifier ?? "en",
-            gl: Locale.current.region?.identifier ?? "US",
+            hl: preferredHL,
+            gl: preferredGL,
             userAgent: "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36; SMART-TV; Tizen 4.0",
             visitorData: visitorData
         ))
+    }
+
+    private static var preferredHL: String {
+        UserDefaults.standard.string(forKey: "contentLanguage")
+            ?? Locale.current.language.languageCode?.identifier ?? "en"
+    }
+
+    private static var preferredGL: String {
+        UserDefaults.standard.string(forKey: "contentRegion")
+            ?? Locale.current.region?.identifier ?? "US"
     }
 }
 
@@ -143,7 +153,7 @@ final class InnerTubeClient {
     static let shared = InnerTubeClient()
 
     // MARK: - Private
-    private let session: URLSession
+    private var session: URLSession
     private let decoder: JSONDecoder
     var visitorData: String? {
         get { UserDefaults.standard.string(forKey: "visitorData") }
@@ -151,7 +161,17 @@ final class InnerTubeClient {
     }
 
     private init() {
-        let config = URLSessionConfiguration.default
+        decoder = JSONDecoder()
+        session = Self.makeSession()
+    }
+
+    func rebuildSession() {
+        session.invalidateAndCancel()
+        session = Self.makeSession()
+    }
+
+    private static func makeSession() -> URLSession {
+        let config = AppProxyManager.shared.makeSessionConfiguration()
         config.httpAdditionalHeaders = [
             "Content-Type": "application/json",
             "Accept":       "application/json",
@@ -162,8 +182,7 @@ final class InnerTubeClient {
         ]
         config.timeoutIntervalForRequest  = 15
         config.timeoutIntervalForResource = 60
-        session = URLSession(configuration: config)
-        decoder = JSONDecoder()
+        return URLSession(configuration: config)
     }
 
     // MARK: - Home Feed

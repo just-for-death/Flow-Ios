@@ -8,12 +8,19 @@ struct FlowApp: App {
     @State private var player       = FlowAVPlayer.shared
     @State private var appRouter    = AppRouter()
     @State private var syncManager  = SyncManager.shared
+    @State private var themeManager = ThemeManager.shared
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     // MARK: - App appearance
     init() {
         AudioSessionManager.configure()
+        FlowCrashHandler.install()
+        MediaCacheManager.applySettings()
+        NotificationService.shared.registerBackgroundTasks()
+        AutoBackupService.shared.registerBackgroundTasks()
+        NotificationService.shared.reschedule()
+        AutoBackupService.shared.reschedule()
         Task { await WebPoTokenSession.prewarm() }
     }
 
@@ -32,6 +39,7 @@ struct FlowApp: App {
             .environment(player)
             .environment(appRouter)
             .environment(syncManager)
+            .preferredColorScheme(themeManager.preferredColorScheme)
         }
     }
 }

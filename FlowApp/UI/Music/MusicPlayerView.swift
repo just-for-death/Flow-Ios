@@ -41,14 +41,19 @@ struct MusicHomeView: View {
 
     private func loadMusicFeed() async {
         isLoading = true
-        // Search for popular music as a fallback, since standard FEmusic_home uses different JSON schema
-        if let page = try? await InnerTubeClient.shared.search(query: "latest popular music videos") {
+        defer { isLoading = false }
+        if let data = try? await InnerTubeClient.shared.browse(browseID: "GCmusic"),
+           let page = try? HomeFeedPage(json: data),
+           !page.videos.isEmpty {
+            tracks = page.videos
+            return
+        }
+        if let page = try? await InnerTubeClient.shared.search(query: "official music video") {
             tracks = page.results.compactMap { item in
                 if case .video(let v) = item { return v }
                 return nil
             }
         }
-        isLoading = false
     }
 }
 
@@ -257,12 +262,8 @@ struct MusicPlayerView: View {
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
 
-                    Button {
-                        // AirPlay handled by system route picker typically
-                    } label: {
-                        Image(systemName: "airplay.audio")
-                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                    }
+                    AirPlayRoutePicker(tintColor: FlowTheme.Colors.onSurfaceVariant)
+                        .frame(width: 28, height: 28)
                 }
                 .font(.system(size: 24))
                 .padding(.top, FlowTheme.Spacing.md)

@@ -84,7 +84,10 @@ final class HomeViewModel {
     // MARK: - Private
     private func fetchPage(category: Category, neuro: NeuroEngine, continuation: String?) async throws -> HomeFeedPage {
         if category == .forYou {
-            return try await InnerTubeClient.shared.fetchHomeFeed(continuation: continuation)
+            let page = try await InnerTubeClient.shared.fetchHomeFeed(continuation: continuation)
+            let subs = Set(SubscriptionStore.shared.channels.map(\.channelID))
+            let ranked = neuro.rank(candidates: page.videos, userSubs: subs)
+            return HomeFeedPage(videos: ranked, continuation: page.continuation)
         } else if let browseID = category.browseID {
             let data = try await InnerTubeClient.shared.browse(browseID: browseID)
             return try HomeFeedPage(json: data)
