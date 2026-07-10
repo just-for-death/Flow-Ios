@@ -51,7 +51,9 @@ final class DownloadService: NSObject {
 
     // MARK: - Start download
     func download(video: VideoItem, stream: StreamInfo) {
-        guard let url = stream.fallbackURL ?? stream.audioURL else { return }
+        // Only progressive muxed streams are valid single-file downloads.
+        // Adaptive DASH tracks are separate video/audio — do not download audio-only or video-only by mistake.
+        guard let url = stream.fallbackURL else { return }
         guard activeTasks[video.id] == nil else { return }
 
         let task = urlSession.downloadTask(with: url)

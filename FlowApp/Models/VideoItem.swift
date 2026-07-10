@@ -231,6 +231,24 @@ struct PlayerResponse: Decodable {
     let videoDetails: VideoDetails?
     let streamingData: StreamingData?
     let playabilityStatus: PlayabilityStatus?
+    let responseContext: ResponseContext?
+    let playerConfig: PlayerConfig?
+
+    struct ResponseContext: Decodable {
+        let visitorData: String?
+    }
+
+    struct PlayerConfig: Decodable {
+        let mediaCommonConfig: MediaCommonConfig?
+
+        struct MediaCommonConfig: Decodable {
+            let mediaUstreamerRequestConfig: UstreamerConfig?
+
+            struct UstreamerConfig: Decodable {
+                let videoPlaybackUstreamerConfig: String?
+            }
+        }
+    }
 
     struct PlayabilityStatus: Decodable {
         let status: String
@@ -274,6 +292,7 @@ struct PlayerResponse: Decodable {
         let formats: [Format]?
         let adaptiveFormats: [Format]?
         let expiresInSeconds: String?
+        let serverAbrStreamingUrl: String?
 
         struct Format: Decodable, Identifiable {
             let itag: Int
@@ -287,6 +306,14 @@ struct PlayerResponse: Decodable {
             let fps: Int?
             let height: Int?
             let width: Int?
+            let lastModified: Int64?
+            let approxDurationMs: String?
+            let audioTrack: AudioTrack?
+
+            struct AudioTrack: Decodable {
+                let id: String?
+            }
+
             var id: String { "\(itag)" }
 
             var isAudio: Bool { mimeType?.contains("audio") == true }
@@ -305,34 +332,43 @@ struct PlayerResponse: Decodable {
 
         let adaptive = streaming.adaptiveFormats ?? []
         let muxed    = streaming.formats ?? []
-        let allFormats = adaptive + muxed
-        guard !allFormats.isEmpty else { throw InnerTubeError.noStreamsAvailable }
+        guard !adaptive.isEmpty || !muxed.isEmpty else { throw InnerTubeError.noStreamsAvailable }
 
-        // Resolve URLs for all formats
-        var resolved: [(format: StreamingData.Format, url: URL)] = []
-        for format in allFormats {
+        // Resolve URLs — keep progressive (muxed) separate from adaptive DASH tracks.
+        var muxResolved: [(format: StreamingData.Format, url: URL)] = []
+        var adaptiveResolved: [(format: StreamingData.Format, url: URL)] = []
+
+        for format in muxed {
             if let url = await StreamURLResolver.resolveURL(for: format, videoID: vid) {
-                resolved.append((format, url))
+                muxResolved.append((format, url))
             }
         }
-        guard !resolved.isEmpty else { throw InnerTubeError.noStreamsAvailable }
+        for format in adaptive {
+            if let url = await StreamURLResolver.resolveURL(for: format, videoID: vid) {
+                adaptiveResolved.append((format, url))
+            }
+        }
 
-        let videoStreams = resolved
-            .filter { $0.format.isVideo }
-            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+        guard !muxResolved.isEmpty || !adaptiveResolved.isEmpty else {
+            throw InnerTubeError.noStreamsAvailable
+        }
 
-        let audioStreams = resolved
-            .filter { $0.format.isAudio }
-            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+        let sortByBitrate: ([(format: StreamingData.Format, url: URL)]) -> [(format: StreamingData.Format, url: URL)] = {
+            $0.sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+        }
 
-        let muxStreams = resolved
-            .filter { !$0.format.isAudio && !$0.format.isVideo }
-            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+        // Progressive streams from `formats` — video+audio muxed in one file.
+        let muxStreams = sortByBitrate(muxResolved)
+
+        // Adaptive DASH — separate video-only and audio-only tracks.
+        let videoStreams = sortByBitrate(adaptiveResolved.filter { $0.format.isVideo })
+        let audioStreams = sortByBitrate(adaptiveResolved.filter { $0.format.isAudio })
 
         let duration = Double(videoDetails?.lengthSeconds ?? "0") ?? 0
         let thumbURL = videoDetails?.thumbnailUrl.flatMap { URL(string: $0) }
 
-        let formats: [StreamFormat] = resolved.map { entry in
+        let allResolved = muxResolved + adaptiveResolved
+        let formats: [StreamFormat] = allResolved.map { entry in
             StreamFormat(
                 id: entry.format.id,
                 quality: entry.format.qualityLabel ?? entry.format.mimeType ?? "unknown",
@@ -347,7 +383,7 @@ struct PlayerResponse: Decodable {
         return StreamInfo(
             videoURL:    videoStreams.first?.url,
             audioURL:    audioStreams.first?.url,
-            fallbackURL: muxStreams.first?.url ?? videoStreams.first?.url,
+            fallbackURL: muxStreams.first?.url,
             formats:     formats,
             duration:    duration,
             title:       videoDetails?.title ?? "",

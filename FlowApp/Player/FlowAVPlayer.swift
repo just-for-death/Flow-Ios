@@ -187,6 +187,28 @@ final class FlowAVPlayer: NSObject {
         player.isMuted = muted
     }
 
+    /// Switch to a specific stream format (quality picker).
+    func switchQuality(to format: StreamFormat) {
+        guard let video = currentVideo else { return }
+        let savedTime = currentTime
+        Task { @MainActor in
+            isLoading = true
+            let item: AVPlayerItem
+            if format.mimeType.contains("audio"), let audioURL = streamInfo?.audioURL, let videoURL = streamInfo?.videoURL {
+                item = (try? await createDASHPlayerItem(videoURL: videoURL, audioURL: format.url)) ?? AVPlayerItem(url: format.url)
+            } else {
+                item = AVPlayerItem(url: format.url)
+            }
+            player.replaceCurrentItem(with: item)
+            observePlayerItem(item)
+            seek(to: savedTime)
+            player.playImmediately(atRate: playbackRate)
+            isPlaying = true
+            isLoading = false
+            updateNowPlayingInfo(video: video, stream: streamInfo!)
+        }
+    }
+
     // MARK: - Sponsor skip
     private func checkSponsorSkip(at time: Double) {
         guard !sponsorSegments.isEmpty, duration > 0 else { return }

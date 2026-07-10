@@ -76,8 +76,12 @@ enum StreamURLResolver {
                 .replacingOccurrences(of: "\\/", with: "/")
         }()
 
-        guard let jsURLString, let jsURL = URL(string: jsURLString) else {
+        guard let jsURLString else {
             throw InnerTubeError.parseError("Could not find player JS URL")
+        }
+
+        guard let jsURL = absoluteYouTubeURL(jsURLString) else {
+            throw InnerTubeError.parseError("Could not resolve player JS URL")
         }
 
         let (jsData, _) = try await URLSession.shared.data(from: jsURL)
@@ -98,6 +102,14 @@ enum StreamURLResolver {
             }
         }
         return url
+    }
+
+    /// Resolves root-relative YouTube paths (e.g. `/s/player/.../base.js`) to absolute URLs.
+    private static func absoluteYouTubeURL(_ string: String) -> URL? {
+        if let url = URL(string: string), url.scheme != nil {
+            return url
+        }
+        return URL(string: string, relativeTo: URL(string: "https://www.youtube.com")!)?.absoluteURL
     }
 
     private static func parseQueryString(_ query: String) -> [String: String] {

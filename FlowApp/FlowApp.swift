@@ -14,6 +14,7 @@ struct FlowApp: App {
     // MARK: - App appearance
     init() {
         AudioSessionManager.configure()
+        Task { await WebPoTokenSession.prewarm() }
     }
 
     var body: some Scene {

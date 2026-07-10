@@ -8,6 +8,7 @@ enum InnerTubeEndpoints {
     static func search()                                 -> URL { url("search") }
     static func player()                                 -> URL { url("player") }
     static func next()                                   -> URL { url("next") }
+    static func reel()                                   -> URL { url("reel/reel_watch_sequence") }
     static func suggest()                                -> URL {
         URL(string: "https://suggestqueries-clients6.youtube.com/complete/search?client=youtube&ds=yt&xhr=t&hjson=t")!
     }
@@ -199,6 +200,70 @@ final class InnerTubeClient {
         guard let arr = try? JSONSerialization.jsonObject(with: data) as? [Any],
               let suggestions = arr[safe: 1] as? [[Any]] else { return [] }
         return suggestions.compactMap { $0.first as? String }
+    }
+
+    // MARK: - Visitor data (for PoToken WEB client)
+    func fetchVisitorData() async throws -> String {
+        var request = URLRequest(url: URL(string: "https://music.youtube.com/sw.js_data")!)
+        request.setValue(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+        let (data, _) = try await session.data(for: request)
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let jsonPart = String(text.dropFirst(5))
+        guard let root = try JSONSerialization.jsonObject(with: Data(jsonPart.utf8)) as? [Any],
+              let level1 = root.first as? [Any],
+              level1.count > 2,
+              let level2 = level1[2] as? [Any] else {
+            throw InnerTubeError.parseError("visitorData not found")
+        }
+        let pattern = try NSRegularExpression(pattern: "^Cg[ts]")
+        for item in level2 {
+            guard let s = item as? String, pattern.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil else { continue }
+            return s
+        }
+        throw InnerTubeError.parseError("visitorData token missing")
+    }
+
+    // MARK: - WEB player with PoToken (bot-wall bypass)
+    func fetchPlayerWeb(videoID: String, poToken: String, visitorData: String) async throws -> PlayerResponse {
+        let webContext = InnerTubeContext.web(visitorData: visitorData)
+        var body: [String: Any] = [
+            "context": encodeContext(webContext),
+            "videoId": videoID,
+            "contentCheckOk": true,
+            "racyCheckOk": true,
+            "serviceIntegrityDimensions": ["poToken": poToken]
+        ]
+        var request = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")!)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("1", forHTTPHeaderField: "X-YouTube-Client-Name")
+        request.setValue("2.20260213.00.00", forHTTPHeaderField: "X-YouTube-Client-Version")
+        request.setValue("https://www.youtube.com", forHTTPHeaderField: "X-Origin")
+        request.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+        request.setValue(visitorData, forHTTPHeaderField: "X-Goog-Visitor-Id")
+        request.setValue(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw InnerTubeError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(PlayerResponse.self, from: data)
+    }
+
+    // MARK: - Shorts reel feed
+    func fetchShortsFeed(sequenceParams: String = "CA8%3D") async throws -> ShortsPage {
+        let body: [String: Any] = [
+            "context": encodeContext(.android(visitorData: visitorData)),
+            "sequenceParams": sequenceParams
+        ]
+        let raw = try await post(to: InnerTubeEndpoints.reel(), body: body)
+        return try ShortsPage(json: raw)
     }
 
     // MARK: - Player (stream info)

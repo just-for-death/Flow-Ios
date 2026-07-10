@@ -9,11 +9,13 @@ struct ContentView: View {
     @State private var showingPlayer = false
 
     enum Tab: String, CaseIterable {
-        case home    = "house.fill"
-        case search  = "magnifyingglass"
-        case music   = "music.note"
-        case library = "folder.fill"
-        case settings = "gearshape.fill"
+        case home          = "house.fill"
+        case shorts        = "play.rectangle.on.rectangle"
+        case subscriptions = "person.2.fill"
+        case search        = "magnifyingglass"
+        case music         = "music.note"
+        case library       = "folder.fill"
+        case settings      = "gearshape.fill"
     }
 
     var body: some View {
@@ -59,11 +61,13 @@ struct ContentView: View {
     private var mainContent: some View {
         Group {
             switch selectedTab {
-            case .home:     HomeView()
-            case .search:   SearchView()
-            case .music:    MusicHomeView()
-            case .library:  LibraryView()
-            case .settings: SettingsView()
+            case .home:          HomeView()
+            case .shorts:        ShortsView()
+            case .subscriptions: SubscriptionsView()
+            case .search:        SearchView()
+            case .music:         MusicHomeView()
+            case .library:       LibraryView()
+            case .settings:      SettingsView()
             }
         }
     }

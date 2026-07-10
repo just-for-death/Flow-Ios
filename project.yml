@@ -24,6 +24,8 @@ targets:
       - path: FlowApp
         excludes:
           - "**/*.md"
+    resources:
+      - path: FlowApp/Resources
     info:
       path: FlowApp/Info.plist
     settings:

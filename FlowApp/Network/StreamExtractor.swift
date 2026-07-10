@@ -21,7 +21,23 @@ enum StreamExtractor {
             }
         }
 
+        // WEB + PoToken fallback (Android tryWebSabr durable path)
+        if let webResponse = try await tryWebPlayer(videoID: videoID),
+           try await hasPlayableStreams(webResponse, videoID: videoID) {
+            return webResponse
+        }
+
         throw lastError
+    }
+
+    private static func tryWebPlayer(videoID: String) async throws -> PlayerResponse? {
+        guard let visitorData = await WebPoTokenSession.sessionVisitorData(),
+              let tokens = await WebPoTokenSession.mint(videoId: videoID) else { return nil }
+        return try await InnerTubeClient.shared.fetchPlayerWeb(
+            videoID: videoID,
+            poToken: tokens.playerRequestPoToken,
+            visitorData: visitorData
+        )
     }
 
     // MARK: - Client chain (matches Android FAST_CLIENTS + embedded TV)
@@ -76,23 +92,35 @@ enum StreamExtractor {
 
     // MARK: - Fetch
 
+    private enum ClientFetchResult {
+        case success(PlayerResponse)
+        case timedOut
+    }
+
     private static func fetchWithClient(_ client: PlayerClient, videoID: String) async throws -> PlayerResponse? {
-        try await withThrowingTaskGroup(of: PlayerResponse?.self) { group in
+        try await withThrowingTaskGroup(of: ClientFetchResult.self) { group in
             group.addTask {
-                try await InnerTubeClient.shared.fetchPlayerResponse(
+                let response = try await InnerTubeClient.shared.fetchPlayerResponse(
                     videoID: videoID,
                     context: client.context,
                     embedVideoID: client.isEmbedded ? videoID : nil
                 )
+                return .success(response)
             }
             group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(perClientTimeout * 1_000_000_000))
+                try await Task.sleep(nanoseconds: UInt64(perClientTimeout * 1_000_000_000))
+                return .timedOut
+            }
+
+            guard let first = try await group.next() else { return nil }
+            group.cancelAll()
+
+            switch first {
+            case .success(let response):
+                return response
+            case .timedOut:
                 return nil
             }
-            for try await result in group {
-                if let result { group.cancelAll(); return result }
-            }
-            return nil
         }
     }
 

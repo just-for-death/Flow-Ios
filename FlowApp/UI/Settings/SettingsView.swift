@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - SettingsView
 struct SettingsView: View {
@@ -94,6 +95,16 @@ struct SettingsView: View {
                 }
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
 
+                // MARK: Import
+                Section {
+                    ImportDataSection()
+                } header: {
+                    Text("Import from NewPipe")
+                } footer: {
+                    Text("Import subscriptions (JSON export) or watch history (newpipe.db).")
+                }
+                .listRowBackground(FlowTheme.Colors.surfaceVariant)
+
                 // MARK: FlowNeuro
                 Section {
                     NavigationLink("Recommendation Dashboard") {
@@ -137,6 +148,41 @@ struct SettingsView: View {
                 SyncView()
             }
         }
+    }
+}
+
+// MARK: - Import Data Section
+struct ImportDataSection: View {
+    @State private var showSubsPicker = false
+    @State private var showHistoryPicker = false
+    @State private var resultMessage: String?
+
+    var body: some View {
+        Group {
+            Button("Import Subscriptions (JSON)") { showSubsPicker = true }
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+            Button("Import Watch History (SQLite)") { showHistoryPicker = true }
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+        }
+        .fileImporter(isPresented: $showSubsPicker, allowedContentTypes: [.json]) { result in
+            if case .success(let url) = result {
+                Task {
+                    let n = (try? await ImportService.importSubscriptionsJSON(from: url)) ?? 0
+                    resultMessage = "Imported \(n) subscriptions."
+                }
+            }
+        }
+        .fileImporter(isPresented: $showHistoryPicker, allowedContentTypes: [.data]) { result in
+            if case .success(let url) = result {
+                Task {
+                    let n = (try? await ImportService.importWatchHistoryDatabase(from: url)) ?? 0
+                    resultMessage = "Imported \(n) watch history entries."
+                }
+            }
+        }
+        .alert("Import Complete", isPresented: .init(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } })) {
+            Button("OK") { resultMessage = nil }
+        } message: { Text(resultMessage ?? "") }
     }
 }
 

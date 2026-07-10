@@ -715,6 +715,15 @@ final class SyncManager {
                     return nil
                 }
 
+            case SyncCollection.subscriptions:
+                let subs = SubscriptionStore.shared.channels
+                payload[collection] = subs.compactMap { sub in
+                    if let data = try? encoder.encode(sub) {
+                        return String(data: data, encoding: .utf8)
+                    }
+                    return nil
+                }
+
             default:
                 payload[collection] = []
             }
@@ -786,6 +795,17 @@ final class SyncManager {
                 }
                 let (added, updated) = FlowDatabase.shared.mergeLikes(incoming)
                 stats[collection] = SyncApplyStats(added: added, updated: updated, skipped: lines.count - added - updated, tombstoned: 0)
+
+            case SyncCollection.subscriptions:
+                var added = 0
+                for line in lines {
+                    if let data = line.data(using: .utf8),
+                       let sub = try? JSONDecoder().decode(ChannelSubscription.self, from: data) {
+                        SubscriptionStore.shared.subscribe(sub)
+                        added += 1
+                    }
+                }
+                stats[collection] = SyncApplyStats(added: added, updated: 0, skipped: lines.count - added, tombstoned: 0)
 
             default:
                 stats[collection] = SyncApplyStats(added: 0, updated: 0, skipped: lines.count, tombstoned: 0)

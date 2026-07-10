@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AVKit
 
 // MARK: - VideoPlayerView
 /// Full-screen video player with custom controls, SponsorBlock indicators, PiP, and related videos.
@@ -117,6 +118,8 @@ struct VideoPlayerView: View {
                                     .foregroundStyle(.white).frame(width: 44, height: 44)
                             }
                         }
+                        AirPlayRoutePicker(tintColor: .white)
+                            .frame(width: 44, height: 44)
                     }
                     .padding(.horizontal, FlowTheme.Spacing.sm)
 
@@ -164,9 +167,10 @@ struct VideoPlayerView: View {
                         }
                         .padding(.horizontal, FlowTheme.Spacing.md)
 
-                        // Speed + fullscreen
+                        // Speed + quality + fullscreen
                         HStack {
                             SpeedMenu()
+                            QualityPickerMenu()
                             Spacer()
                             Button {
                                 withAnimation(FlowTheme.Animation.standard) {
