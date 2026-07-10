@@ -32,6 +32,9 @@ struct InnerTubeContext: Encodable {
         var osVersion: String?
         var deviceMake: String?
         var deviceModel: String?
+        var androidSdkVersion: String?
+        var buildId: String?
+        var cronetVersion: String?
     }
 
     static func web(visitorData: String? = nil) -> InnerTubeContext {
@@ -59,17 +62,64 @@ struct InnerTubeContext: Encodable {
     static func ios(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "IOS",
-            clientVersion: "21.03.3",
-            hl: Locale.current.language.languageCode?.identifier ?? "en",
-            gl: Locale.current.region?.identifier ?? "US",
-            userAgent: "com.google.ios.youtube/21.03.3 (iPad7,6; U; CPU iPadOS 17_7_10 like Mac OS X; en-US)",
+            clientVersion: "21.03.1",
+            hl: "en",
+            gl: "US",
+            userAgent: "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)",
             visitorData: visitorData,
-            osName: "iPadOS",
-            osVersion: "17.7.10.21H450",
+            osName: "iPhone",
+            osVersion: "18.2.22C152",
             deviceMake: "Apple",
-            deviceModel: "iPad7,6"
+            deviceModel: "iPhone16,2"
         ))
     }
+
+    static func ipados(visitorData: String? = nil) -> InnerTubeContext {
+        InnerTubeContext(client: Client(
+            clientName: "IOS",
+            clientVersion: "21.03.1",
+            hl: "en",
+            gl: "US",
+            userAgent: "com.google.ios.youtube/21.03.1 (iPad14,8; U; CPU OS 18_2 like Mac OS X;)",
+            visitorData: visitorData,
+            osName: "iPadOS",
+            osVersion: "18.2.22C152",
+            deviceMake: "Apple",
+            deviceModel: "iPad14,8"
+        ))
+    }
+
+    static func androidVR(
+        version: String,
+        userAgent: String,
+        deviceModel: String,
+        cronetVersion: String
+    ) -> InnerTubeContext {
+        InnerTubeContext(client: Client(
+            clientName: "ANDROID_VR",
+            clientVersion: version,
+            hl: "en",
+            gl: "US",
+            userAgent: userAgent,
+            visitorData: nil,
+            osName: "Android",
+            osVersion: "12",
+            deviceMake: "Oculus",
+            deviceModel: deviceModel,
+            androidSdkVersion: "32",
+            buildId: "SQ3A.220605.009.A1",
+            cronetVersion: cronetVersion
+        ))
+    }
+
+    static let tvEmbedded = InnerTubeContext(client: Client(
+        clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+        clientVersion: "2.0",
+        hl: "en",
+        gl: "US",
+        userAgent: "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
+        visitorData: nil
+    ))
 
     static func tv(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
@@ -153,8 +203,16 @@ final class InnerTubeClient {
 
     // MARK: - Player (stream info)
     func fetchPlayerInfo(videoID: String) async throws -> PlayerResponse {
-        let body: [String: Any] = [
-            "context": encodeContext(.tv(visitorData: visitorData)),
+        try await StreamExtractor.extract(videoID: videoID)
+    }
+
+    func fetchPlayerResponse(
+        videoID: String,
+        context: InnerTubeContext,
+        embedVideoID: String? = nil
+    ) async throws -> PlayerResponse {
+        var body: [String: Any] = [
+            "context": encodeContext(context, embedVideoID: embedVideoID),
             "videoId": videoID
         ]
         let raw = try await post(to: InnerTubeEndpoints.player(), body: body)
@@ -194,12 +252,17 @@ final class InnerTubeClient {
         return data
     }
 
-    private func encodeContext(_ ctx: InnerTubeContext) -> [String: Any] {
+    private func encodeContext(_ ctx: InnerTubeContext, embedVideoID: String? = nil) -> [String: Any] {
         guard let data = try? JSONEncoder().encode(ctx),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let client = dict["client"] else {
             return [:]
         }
-        return ["client": dict["client"] as Any]
+        var context: [String: Any] = ["client": client]
+        if let embedVideoID {
+            context["thirdParty"] = ["embedUrl": "https://www.youtube.com/watch?v=\(embedVideoID)"]
+        }
+        return context
     }
 }
 

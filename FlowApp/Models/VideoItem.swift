@@ -230,6 +230,12 @@ struct NextPage {
 struct PlayerResponse: Decodable {
     let videoDetails: VideoDetails?
     let streamingData: StreamingData?
+    let playabilityStatus: PlayabilityStatus?
+
+    struct PlayabilityStatus: Decodable {
+        let status: String
+        let reason: String?
+    }
 
     struct VideoDetails: Decodable {
         let videoId: String
@@ -273,56 +279,75 @@ struct PlayerResponse: Decodable {
             let itag: Int
             let url: String?
             let signatureCipher: String?
+            let cipher: String?
             let mimeType: String?
             let qualityLabel: String?
             let bitrate: Int?
             let audioSampleRate: String?
             let fps: Int?
+            let height: Int?
+            let width: Int?
             var id: String { "\(itag)" }
+
+            var isAudio: Bool { mimeType?.contains("audio") == true }
+            var isVideo: Bool { mimeType?.contains("video") == true }
         }
     }
 
-    /// Resolves to a StreamInfo, picking best quality streams.
-    func toStreamInfo() throws -> StreamInfo {
+    /// Resolves to a StreamInfo, picking best quality streams with URL deciphering.
+    func toStreamInfo(videoID: String? = nil) async throws -> StreamInfo {
+        guard playabilityStatus?.status == "OK" || playabilityStatus == nil else {
+            throw InnerTubeError.parseError(playabilityStatus?.reason ?? "Video unavailable")
+        }
         guard let streaming = streamingData else { throw InnerTubeError.noStreamsAvailable }
-        let allFormats = (streaming.adaptiveFormats ?? []) + (streaming.formats ?? [])
+        let vid = videoID ?? videoDetails?.videoId ?? ""
+        guard !vid.isEmpty else { throw InnerTubeError.noStreamsAvailable }
+
+        let adaptive = streaming.adaptiveFormats ?? []
+        let muxed    = streaming.formats ?? []
+        let allFormats = adaptive + muxed
         guard !allFormats.isEmpty else { throw InnerTubeError.noStreamsAvailable }
 
-        // Best video-only stream
-        let videoStreams = (streaming.adaptiveFormats ?? [])
-            .filter { $0.mimeType?.contains("video") == true && $0.url != nil }
-            .sorted { ($0.bitrate ?? 0) > ($1.bitrate ?? 0) }
+        // Resolve URLs for all formats
+        var resolved: [(format: StreamingData.Format, url: URL)] = []
+        for format in allFormats {
+            if let url = await StreamURLResolver.resolveURL(for: format, videoID: vid) {
+                resolved.append((format, url))
+            }
+        }
+        guard !resolved.isEmpty else { throw InnerTubeError.noStreamsAvailable }
 
-        // Best audio-only stream
-        let audioStreams = (streaming.adaptiveFormats ?? [])
-            .filter { $0.mimeType?.contains("audio") == true && $0.url != nil }
-            .sorted { ($0.bitrate ?? 0) > ($1.bitrate ?? 0) }
+        let videoStreams = resolved
+            .filter { $0.format.isVideo }
+            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
 
-        // Fallback mux
-        let muxStreams = (streaming.formats ?? [])
-            .filter { $0.url != nil }
-            .sorted { ($0.bitrate ?? 0) > ($1.bitrate ?? 0) }
+        let audioStreams = resolved
+            .filter { $0.format.isAudio }
+            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
+
+        let muxStreams = resolved
+            .filter { !$0.format.isAudio && !$0.format.isVideo }
+            .sorted { ($0.format.bitrate ?? 0) > ($1.format.bitrate ?? 0) }
 
         let duration = Double(videoDetails?.lengthSeconds ?? "0") ?? 0
         let thumbURL = videoDetails?.thumbnailUrl.flatMap { URL(string: $0) }
 
-        let formats: [StreamFormat] = allFormats.compactMap { f in
-            guard let urlStr = f.url, let url = URL(string: urlStr) else { return nil }
-            return StreamFormat(
-                id: f.id,
-                quality: f.qualityLabel ?? f.mimeType ?? "unknown",
-                mimeType: f.mimeType ?? "",
-                url: url,
-                bitrate: f.bitrate,
-                audioSampleRate: f.audioSampleRate,
-                fps: f.fps
+        let formats: [StreamFormat] = resolved.map { entry in
+            StreamFormat(
+                id: entry.format.id,
+                quality: entry.format.qualityLabel ?? entry.format.mimeType ?? "unknown",
+                mimeType: entry.format.mimeType ?? "",
+                url: entry.url,
+                bitrate: entry.format.bitrate,
+                audioSampleRate: entry.format.audioSampleRate,
+                fps: entry.format.fps
             )
         }
 
         return StreamInfo(
-            videoURL:    videoStreams.first?.url.flatMap(URL.init),
-            audioURL:    audioStreams.first?.url.flatMap(URL.init),
-            fallbackURL: muxStreams.first?.url.flatMap(URL.init),
+            videoURL:    videoStreams.first?.url,
+            audioURL:    audioStreams.first?.url,
+            fallbackURL: muxStreams.first?.url ?? videoStreams.first?.url,
             formats:     formats,
             duration:    duration,
             title:       videoDetails?.title ?? "",

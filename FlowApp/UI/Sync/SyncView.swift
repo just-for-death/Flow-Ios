@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import CoreImage
+import UIKit
 
 // MARK: - SyncView
 /// Device-to-device sync UI — mirrors the Android FLOW-SYNC/1 onboarding flow.

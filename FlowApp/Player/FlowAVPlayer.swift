@@ -1,7 +1,8 @@
 import AVFoundation
-import MediaPlayer
-import Combine
 import AVKit
+import Combine
+import MediaPlayer
+import UIKit
 
 // MARK: - FlowAVPlayer
 /// Singleton AVPlayer wrapper.
@@ -84,7 +85,7 @@ final class FlowAVPlayer: NSObject {
 
             do {
                 let (info, segs) = try await (playerInfo, segments)
-                let stream = try info.toStreamInfo()
+                let stream = try await info.toStreamInfo(videoID: video.id)
                 streamInfo = stream
                 duration   = stream.duration
 
