@@ -472,10 +472,39 @@ final class NeuroEngine {
 
     func importBrain(_ data: Data) throws {
         let imported = try JSONDecoder().decode(UserBrain.self, from: data)
-        brain = imported
-        idfWordFrequency  = brain.idfWordFrequency
-        idfTotalDocuments = brain.idfTotalDocuments
-        storage.save(brain)
+        mergeBrain(imported)
+    }
+
+    func mergeBrain(_ remote: UserBrain) {
+        brainQueue.async { [weak self] in
+            guard let self else { return }
+            let merged = NeuroBrainMerger.merge(local: self.brain, remote: remote)
+            DispatchQueue.main.async {
+                self.brain = merged
+                self.idfWordFrequency = merged.idfWordFrequency
+                self.idfTotalDocuments = merged.idfTotalDocuments
+                for (id, pct) in merged.watchHistoryMap {
+                    self.watchHistory[id] = WatchEntry(percentWatched: pct, timestamp: Date().timeIntervalSince1970)
+                }
+                self.scheduleDebouncedSave()
+            }
+        }
+    }
+
+    func restoreContentPreferences(
+        preferredTopics: Set<String>,
+        blockedTopics: Set<String>,
+        blockedChannels: Set<String>
+    ) {
+        brainQueue.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.brain.preferredTopics.formUnion(preferredTopics)
+                self.brain.blockedTopics.formUnion(blockedTopics)
+                self.brain.blockedChannels.formUnion(blockedChannels)
+                self.scheduleDebouncedSave()
+            }
+        }
     }
 
     // MARK: - Reset
@@ -641,6 +670,7 @@ final class NeuroEngine {
         brainQueue.async { [weak self] in
             guard let self else { return }
             self.brain.watchHistoryMap[videoId] = percent
+            self.watchHistory[videoId] = WatchEntry(percentWatched: percent, timestamp: Date().timeIntervalSince1970)
             self.scheduleDebouncedSave()
         }
     }

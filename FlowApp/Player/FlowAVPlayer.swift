@@ -25,11 +25,17 @@ final class FlowAVPlayer: NSObject {
     var error: Error?
     var sponsorSegments: [SponsorSegment] = []
     var isInPiP: Bool         = false
+    /// Called when playback ends (unless looping). Set by VideoPlayerView for autoplay.
+    var onVideoFinished: (() -> Void)?
 
     // MARK: - Private
     private let player = AVPlayer()
     private var timeObserver: Any?
     private var itemObservations: [NSKeyValueObservation] = []
+    private var lastWatchHistoryUpdate: TimeInterval = 0
+    private var sponsorMuted = false
+    private var normalVolume: Float = 1.0
+    private var resumeAppliedForVideoID: String?
     private let innerTube = InnerTubeClient.shared
     private let sponsorBlock = SponsorBlockService.shared
     private var pipController: AVPictureInPictureController?
@@ -38,6 +44,7 @@ final class FlowAVPlayer: NSObject {
         super.init()
         setupTimeObserver()
         setupRemoteCommandCenter()
+        SleepTimerManager.shared.attach { [weak self] in self?.pause() }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(playerItemDidFinish),
@@ -48,8 +55,17 @@ final class FlowAVPlayer: NSObject {
 
     // MARK: - Load & play
     func play(video: VideoItem, localURL: URL? = nil) {
+        if localURL == nil {
+            let queue = PlaybackQueue.shared
+            if let _ = queue.index(of: video.id) {
+                _ = queue.jumpTo(videoID: video.id)
+            } else {
+                queue.setQueue([video], startIndex: 0)
+            }
+        }
         Task { @MainActor in
             currentVideo  = video
+            resumeAppliedForVideoID = nil
             isLoading     = true
             error         = nil
             sponsorSegments = []
@@ -86,7 +102,8 @@ final class FlowAVPlayer: NSObject {
 
             do {
                 let (info, segs) = try await (playerInfo, segments)
-                let stream = try await info.toStreamInfo(videoID: video.id)
+                let quality = PlayerPreferences.shared.effectivePlaybackQuality
+                let stream = try await info.toStreamInfo(videoID: video.id, preferredQuality: quality)
                 streamInfo = stream
                 duration   = stream.duration
 
@@ -114,6 +131,7 @@ final class FlowAVPlayer: NSObject {
                 player.replaceCurrentItem(with: item)
                 applyBufferSettings(to: item)
                 observePlayerItem(item)
+                applyResumeIfNeeded(for: video)
                 player.playImmediately(atRate: playbackRate)
                 isPlaying = true
                 isLoading = false
@@ -158,9 +176,46 @@ final class FlowAVPlayer: NSObject {
         return AVPlayerItem(asset: composition)
     }
 
+    /// Play a list starting at `startIndex` (playlist / queue).
+    func playQueue(_ videos: [VideoItem], startIndex: Int = 0) {
+        guard videos.indices.contains(startIndex) else { return }
+        PlaybackQueue.shared.setQueue(videos, startIndex: startIndex)
+        play(video: videos[startIndex])
+    }
+
+    func playNextInQueue() {
+        guard let next = PlaybackQueue.shared.playNext() else { return }
+        play(video: next)
+    }
+
+    func playPreviousInQueue() {
+        guard let prev = PlaybackQueue.shared.playPrevious() else { return }
+        play(video: prev)
+    }
+
+    func enqueue(_ video: VideoItem) {
+        PlaybackQueue.shared.enqueueNext(video)
+    }
+
+    func toggleSubtitles() {
+        let prefs = PlayerPreferences.shared
+        prefs.subtitlesEnabled.toggle()
+        guard let item = player.currentItem else { return }
+        if prefs.subtitlesEnabled {
+            applySubtitles(to: item)
+        } else {
+            Task {
+                if let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) {
+                    await MainActor.run { item.select(nil, in: group) }
+                }
+            }
+        }
+    }
+
     func pause() {
         player.pause()
         isPlaying = false
+        recordWatchProgressIfNeeded()
     }
 
     func stop() {
@@ -233,16 +288,30 @@ final class FlowAVPlayer: NSObject {
         }
     }
 
-    // MARK: - Sponsor skip
+    // MARK: - Sponsor skip / mute
     private func checkSponsorSkip(at time: Double) {
         guard !sponsorSegments.isEmpty, duration > 0 else { return }
         let fraction = time / duration
-        for seg in sponsorSegments where seg.skipAutomatically {
-            if fraction >= seg.start && fraction < seg.end {
-                // Skip to end of segment
+        var inMuteSegment = false
+        for seg in sponsorSegments {
+            guard fraction >= seg.start && fraction < seg.end else { continue }
+            if seg.skipAutomatically {
                 seek(to: seg.end * duration + 0.1)
-                break
+                return
             }
+            if seg.shouldMute {
+                inMuteSegment = true
+                if !sponsorMuted {
+                    normalVolume = player.volume
+                    player.volume = 0
+                    sponsorMuted = true
+                }
+                return
+            }
+        }
+        if sponsorMuted && !inMuteSegment {
+            player.volume = normalVolume
+            sponsorMuted = false
         }
     }
 
@@ -271,6 +340,7 @@ final class FlowAVPlayer: NSObject {
             let secs = time.seconds
             self.currentTime = secs
             self.checkSponsorSkip(at: secs)
+            self.recordWatchProgressIfNeeded()
             if let item = self.player.currentItem {
                 let loaded = item.loadedTimeRanges.first?.timeRangeValue
                 let bufferedEnd = (loaded?.start.seconds ?? 0) + (loaded?.duration.seconds ?? 0)
@@ -281,6 +351,7 @@ final class FlowAVPlayer: NSObject {
 
     private func observePlayerItem(_ item: AVPlayerItem) {
         applyBufferSettings(to: item)
+        applySubtitles(to: item)
         itemObservations.forEach { $0.invalidate() }
         itemObservations = [
             item.observe(\.status) { [weak self] item, _ in
@@ -291,21 +362,80 @@ final class FlowAVPlayer: NSObject {
             item.observe(\.duration) { [weak self] item, _ in
                 DispatchQueue.main.async {
                     let d = item.duration.seconds
-                    if d.isFinite && d > 0 { self?.duration = d }
+                    if d.isFinite && d > 0 {
+                        self?.duration = d
+                        if let video = self?.currentVideo {
+                            self?.applyResumeIfNeeded(for: video)
+                        }
+                    }
                 }
             }
         ]
     }
 
     @objc private func playerItemDidFinish() {
+        SleepTimerManager.shared.onMediaEnded()
+        recordWatchProgressIfNeeded(force: true)
+        if PlayerPreferences.shared.videoLoopEnabled, currentVideo != nil {
+            seek(to: 0)
+            player.playImmediately(atRate: playbackRate)
+            isPlaying = true
+            return
+        }
+        if PlayerPreferences.shared.queueAutoplayEnabled,
+           PlaybackQueue.shared.hasNext,
+           let next = PlaybackQueue.shared.playNext() {
+            play(video: next)
+            return
+        }
         isPlaying = false
-        currentTime = 0
+        onVideoFinished?()
+    }
+
+    private func applyResumeIfNeeded(for video: VideoItem) {
+        guard PlayerPreferences.shared.resumePlaybackEnabled else { return }
+        guard resumeAppliedForVideoID != video.id else { return }
+        guard let fraction = NeuroEngine.shared.brain.watchHistoryMap[video.id],
+              fraction > 0.05, fraction < 0.95 else { return }
+        guard duration > 0 else { return }
+        resumeAppliedForVideoID = video.id
+        seek(to: Double(fraction) * duration)
+    }
+
+    private func recordWatchProgressIfNeeded(force: Bool = false) {
+        guard let video = currentVideo, duration > 0 else { return }
+        let now = Date().timeIntervalSince1970
+        if !force, now - lastWatchHistoryUpdate < 30 { return }
+        lastWatchHistoryUpdate = now
+        let fraction = Float(min(max(currentTime / duration, 0), 1))
+        guard fraction >= 0.05 else { return }
+        NeuroEngine.shared.updateWatchHistoryMap(videoId: video.id, percent: fraction)
+        WatchHistoryStore.shared.record(
+            video: video,
+            progress: fraction,
+            durationSeconds: Int(duration)
+        )
     }
 
     private func applyBufferSettings(to item: AVPlayerItem) {
         let prefs = PlayerPreferences.shared
+        let profile = prefs.bufferProfile
         item.preferredForwardBufferDuration = prefs.preferredForwardBufferDuration
-        player.automaticallyWaitsToMinimizeStalling = prefs.bufferProfile != .aggressive
+        player.automaticallyWaitsToMinimizeStalling = profile != .aggressive
+        if profile == .datasaver {
+            item.preferredPeakBitRate = 1_500_000
+        } else if profile == .aggressive {
+            item.preferredPeakBitRate = 0
+        }
+    }
+
+    private func applySubtitles(to item: AVPlayerItem) {
+        guard PlayerPreferences.shared.subtitlesEnabled else { return }
+        Task {
+            guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
+                  let option = group.options.first else { return }
+            await MainActor.run { item.select(option, in: group) }
+        }
     }
 
     // MARK: - Lock screen / Control Center
@@ -323,6 +453,14 @@ final class FlowAVPlayer: NSObject {
         cc.skipBackwardCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             self.seek(to: max(self.currentTime - 10, 0))
+            return .success
+        }
+        cc.nextTrackCommand.addTarget { [weak self] _ in
+            self?.playNextInQueue()
+            return .success
+        }
+        cc.previousTrackCommand.addTarget { [weak self] _ in
+            self?.playPreviousInQueue()
             return .success
         }
         cc.changePlaybackPositionCommand.addTarget { [weak self] event in

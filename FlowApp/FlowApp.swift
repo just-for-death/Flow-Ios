@@ -4,11 +4,13 @@ import SwiftUI
 struct FlowApp: App {
 
     // MARK: - Shared state
-    @State private var neuroEngine  = NeuroEngine.shared
-    @State private var player       = FlowAVPlayer.shared
-    @State private var appRouter    = AppRouter()
-    @State private var syncManager  = SyncManager.shared
-    @State private var themeManager = ThemeManager.shared
+    @State private var neuroEngine   = NeuroEngine.shared
+    @State private var player        = FlowAVPlayer.shared
+    @State private var appRouter     = AppRouter()
+    @State private var syncManager   = SyncManager.shared
+    @State private var themeManager  = ThemeManager.shared
+    @State private var navTabManager = NavTabManager.shared
+    @State private var flowDatabase  = FlowDatabase.shared
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
@@ -16,11 +18,14 @@ struct FlowApp: App {
     init() {
         AudioSessionManager.configure()
         FlowCrashHandler.install()
+        _ = NetworkPathMonitor.shared
         MediaCacheManager.applySettings()
         NotificationService.shared.registerBackgroundTasks()
         AutoBackupService.shared.registerBackgroundTasks()
         NotificationService.shared.reschedule()
         AutoBackupService.shared.reschedule()
+        ReminderService.shared.rescheduleAll()
+        NotificationService.shared.checkForAppUpdatesIfEnabled()
         Task { await WebPoTokenSession.prewarm() }
     }
 
@@ -39,6 +44,8 @@ struct FlowApp: App {
             .environment(player)
             .environment(appRouter)
             .environment(syncManager)
+            .environment(navTabManager)
+            .environment(flowDatabase)
             .preferredColorScheme(themeManager.preferredColorScheme)
         }
     }
@@ -54,6 +61,17 @@ final class AppRouter {
     }
     var activeVideoID: String? = nil
     var activeMusicID: String? = nil
+    var requestedTab: NavTab? = nil
+    var requestedShortID: String? = nil
+
+    func requestTab(_ tab: NavTab) {
+        requestedTab = tab
+    }
+
+    func openShort(_ videoID: String) {
+        requestedShortID = videoID
+        requestedTab = .shorts
+    }
 }
 
 import AVFoundation
@@ -82,5 +100,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         completionHandler: @escaping () -> Void
     ) {
         DownloadService.shared.backgroundCompletionHandler = completionHandler
+    }
+
+    func applicationWillResignActive(_ application: UIApplication) {
+        let player = FlowAVPlayer.shared
+        let prefs = PlayerPreferences.shared
+
+        if prefs.autoPipEnabled, player.isPlaying, !player.isInPiP {
+            player.startPiP()
+            return
+        }
+
+        if !prefs.backgroundPlayEnabled, player.isPlaying {
+            player.pause()
+        }
     }
 }

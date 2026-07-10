@@ -13,10 +13,17 @@ struct VideoPlayerView: View {
     @State private var showControls  = true
     @State private var controlsTimer: Timer?
     @State private var isFullscreen  = false
-    @State private var showRelated   = true
+    @State private var showRelated   = PlayerPreferences.shared.showRelatedVideos
     @State private var relatedVideos: [VideoItem] = []
     @State private var rydData: RYDService.VoteCounts?
     @State private var deArrowBranding: DeArrowService.Branding?
+    @State private var comments: [VideoComment] = []
+    @State private var showComments = false
+    @State private var showSleepTimer = false
+    @State private var sleepTimer = SleepTimerManager.shared
+    @State private var showQueue = false
+    @State private var isLiked = false
+    @State private var showSavePlaylist = false
     @GestureState private var dragOffset = CGSize.zero
 
     var body: some View {
@@ -48,17 +55,31 @@ struct VideoPlayerView: View {
                     }
                 }
             }
-            .preferredColorScheme(.dark)
             .ignoresSafeArea(edges: isFullscreen ? .all : [])
-            .task(id: player.currentVideo?.id) {
-                await loadRelated()
-                await loadExtras()
-            }
+            .onAppear { installAutoplayHandler() }
+            .onChange(of: relatedVideos.map(\.id)) { _, _ in installAutoplayHandler() }
             .onDisappear {
+                player.onVideoFinished = nil
                 // Record watch completion to NeuroEngine
                 if let video = player.currentVideo, player.duration > 0 {
                     let fraction = player.currentTime / player.duration
                     neuro.onVideoInteraction(video: video, interaction: .watched(Float(fraction)))
+                }
+            }
+            .task(id: player.currentVideo?.id) {
+                showRelated = PlayerPreferences.shared.showRelatedVideos
+                await loadRelated()
+                await loadExtras()
+                await loadComments()
+            }
+            .sheet(isPresented: $showQueue) {
+                QueueSheet()
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showSavePlaylist) {
+                if let video = player.currentVideo {
+                    SaveToPlaylistSheet(video: video, durationSeconds: Int64(player.duration))
+                        .presentationDetents([.medium, .large])
                 }
             }
         }
@@ -68,6 +89,7 @@ struct VideoPlayerView: View {
         PlayerSurface()
             .aspectRatio(16/9, contentMode: .fit)
             .background(Color.black)
+            .overlay(PlayerGestureOverlay())
             .overlay(controlsOverlay)
             .onTapGesture { toggleControls() }
             .gesture(
@@ -83,6 +105,9 @@ struct VideoPlayerView: View {
             VStack(alignment: .leading, spacing: FlowTheme.Spacing.md) {
                 videoInfo
                 Divider().background(FlowTheme.Colors.outline)
+                if PlayerPreferences.shared.commentsEnabled {
+                    commentsSection
+                }
                 if showRelated { relatedSection }
             }
             .padding(FlowTheme.Spacing.md)
@@ -120,6 +145,20 @@ struct VideoPlayerView: View {
                         }
                         AirPlayRoutePicker(tintColor: .white)
                             .frame(width: 44, height: 44)
+                        Menu {
+                            Button("15 min") { sleepTimer.start(minutes: 15) }
+                            Button("30 min") { sleepTimer.start(minutes: 30) }
+                            Button("45 min") { sleepTimer.start(minutes: 45) }
+                            Button("End of video") { sleepTimer.startEndOfMedia() }
+                            if sleepTimer.isActive { Button("Cancel timer", role: .destructive) { sleepTimer.cancel() } }
+                        } label: {
+                            Image(systemName: sleepTimer.isActive ? "moon.fill" : "moon")
+                                .foregroundStyle(.white).frame(width: 44, height: 44)
+                        }
+                        Button { showQueue = true } label: {
+                            Image(systemName: "list.bullet")
+                                .foregroundStyle(.white).frame(width: 44, height: 44)
+                        }
                     }
                     .padding(.horizontal, FlowTheme.Spacing.sm)
 
@@ -171,6 +210,16 @@ struct VideoPlayerView: View {
                         HStack {
                             SpeedMenu()
                             QualityPickerMenu()
+                            Button { player.toggleSubtitles() } label: {
+                                Image(systemName: PlayerPreferences.shared.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                            }
+                            if sleepTimer.isActive, let remaining = sleepTimer.remainingDescription {
+                                Text(remaining)
+                                    .font(FlowTheme.Typography.labelSmall)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
                             Spacer()
                             Button {
                                 withAnimation(FlowTheme.Animation.standard) {
@@ -254,23 +303,29 @@ struct VideoPlayerView: View {
                     // Like Action
                     Button {
                         if let video = player.currentVideo {
-                            let like = CanonicalLike(
-                                kind: CanonicalLike.KIND_VIDEO, id: video.id, state: CanonicalLike.STATE_LIKED,
-                                updatedAtMs: Int64(Date().timeIntervalSince1970 * 1000), hlc: UUID().uuidString,
-                                meta: CanonicalLikeMeta(title: video.title, artist: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""),
-                                title: video.title, channelName: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
-                            )
-                            _ = FlowDatabase.shared.mergeLikes([like])
+                            isLiked.toggle()
+                            FlowDatabase.shared.setLiked(isLiked, video: video)
+                            if isLiked {
+                                neuro.onVideoInteraction(video: video, interaction: .liked)
+                            }
                         }
                     } label: {
-                        Label("Like", systemImage: "hand.thumbsup")
+                        Label("Like", systemImage: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup")
                     }
                     .buttonStyle(FlowChipButtonStyle())
 
-                    // Download Action
                     Button {
-                        if let video = player.currentVideo, let stream = player.streamInfo {
-                            DownloadService.shared.download(video: video, stream: stream)
+                        if let video = player.currentVideo {
+                            player.enqueue(video)
+                        }
+                    } label: {
+                        Label("Queue", systemImage: "text.line.last.and.arrowtriangle.forward")
+                    }
+                    .buttonStyle(FlowChipButtonStyle())
+
+                    Button {
+                        if let video = player.currentVideo {
+                            DownloadService.shared.download(video: video, stream: player.streamInfo)
                         }
                     } label: {
                         Label("Download", systemImage: "arrow.down.circle")
@@ -279,26 +334,63 @@ struct VideoPlayerView: View {
 
                     // Save Action (creates a default local playlist for now)
                     Button {
-                        if let video = player.currentVideo {
-                            let item = CanonicalPlaylistItem(
-                                videoId: video.id, addedAtMs: Int64(Date().timeIntervalSince1970 * 1000),
-                                title: video.title, channelName: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? "",
-                                durationSeconds: Int64(player.duration), hlc: UUID().uuidString
-                            )
-                            var list = FlowDatabase.shared.playlists["saved"] ?? CanonicalPlaylist(
-                                syncId: "saved", title: "Saved Videos", description: "Local Saved Items",
-                                createdAtMs: Int64(Date().timeIntervalSince1970 * 1000), updatedHlc: UUID().uuidString
-                            )
-                            list.items.append(item)
-                            list.updatedHlc = UUID().uuidString
-                            _ = FlowDatabase.shared.mergePlaylists([list])
-                        }
+                        showSavePlaylist = true
                     } label: {
                         Label("Save", systemImage: "plus.square.on.square")
                     }
                     .buttonStyle(FlowChipButtonStyle())
                 }
                 .padding(.top, FlowTheme.Spacing.xs)
+            }
+        }
+    }
+
+    // MARK: - Comments
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+            Button {
+                withAnimation { showComments.toggle() }
+            } label: {
+                HStack {
+                    Text("Comments")
+                        .font(FlowTheme.Typography.titleSmall)
+                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                    Spacer()
+                    Text("\(comments.count)")
+                        .font(FlowTheme.Typography.labelMedium)
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                    Image(systemName: showComments ? "chevron.up" : "chevron.down")
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if showComments {
+                if comments.isEmpty {
+                    Text("No comments loaded")
+                        .font(FlowTheme.Typography.bodySmall)
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                } else {
+                    ForEach(comments.prefix(20)) { comment in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(comment.author)
+                                    .font(FlowTheme.Typography.labelLarge)
+                                    .foregroundStyle(FlowTheme.Colors.onSurface)
+                                Spacer()
+                                if !comment.likeCount.isEmpty {
+                                    Text(comment.likeCount)
+                                        .font(FlowTheme.Typography.labelSmall)
+                                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                }
+                            }
+                            Text(comment.text)
+                                .font(FlowTheme.Typography.bodySmall)
+                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        }
+                        .padding(.vertical, FlowTheme.Spacing.xs)
+                    }
+                }
             }
         }
     }
@@ -312,9 +404,29 @@ struct VideoPlayerView: View {
 
             ForEach(relatedVideos) { video in
                 HorizontalVideoRow(video: video) {
-                    player.play(video: video)
+                    if let idx = relatedVideos.firstIndex(where: { $0.id == video.id }) {
+                        player.playQueue(relatedVideos, startIndex: idx)
+                    } else {
+                        player.play(video: video)
+                    }
                 }
             }
+        }
+    }
+
+    private func loadComments() async {
+        guard PlayerPreferences.shared.commentsEnabled,
+              let id = player.currentVideo?.id else {
+            comments = []
+            return
+        }
+        comments = (try? await CommentsService.fetchComments(videoID: id)) ?? []
+    }
+
+    private func installAutoplayHandler() {
+        player.onVideoFinished = { [relatedVideos] in
+            guard PlayerPreferences.shared.autoplayEnabled, !relatedVideos.isEmpty else { return }
+            player.playQueue(relatedVideos, startIndex: 0)
         }
     }
 
@@ -341,6 +453,7 @@ struct VideoPlayerView: View {
 
     private func loadExtras() async {
         guard let id = player.currentVideo?.id else { return }
+        isLiked = FlowDatabase.shared.isLiked(kind: CanonicalLike.KIND_VIDEO, id: id)
         async let ryd      = try? RYDService.shared.fetch(videoID: id)
         async let branding = try? DeArrowService.shared.fetch(videoID: id)
         let (r, b) = await (ryd, branding)

@@ -27,8 +27,37 @@ final class SponsorBlockService {
     }
 
     var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "sb_enabled_global") }
+        get {
+            if UserDefaults.standard.object(forKey: "sb_enabled_global") == nil { return true }
+            return UserDefaults.standard.bool(forKey: "sb_enabled_global")
+        }
         set { UserDefaults.standard.set(newValue, forKey: "sb_enabled_global") }
+    }
+
+    enum CategoryAction: String, CaseIterable, Codable {
+        case skip = "SKIP"
+        case mute = "MUTE"
+        case manual = "MANUAL"
+        case show = "SHOW"
+
+        var displayName: String {
+            switch self {
+            case .skip: return "Skip"
+            case .mute: return "Mute"
+            case .manual: return "Manual"
+            case .show: return "Show"
+            }
+        }
+    }
+
+    func action(for category: SponsorCategory) -> CategoryAction {
+        let key = "sb_action_\(category.rawValue)"
+        let raw = UserDefaults.standard.string(forKey: key) ?? CategoryAction.skip.rawValue
+        return CategoryAction(rawValue: raw) ?? .skip
+    }
+
+    func setAction(_ action: CategoryAction, for category: SponsorCategory) {
+        UserDefaults.standard.set(action.rawValue, forKey: "sb_action_\(category.rawValue)")
     }
 
     // MARK: - Fetch
@@ -58,9 +87,11 @@ final class SponsorBlockService {
             guard seg.segment.count == 2,
                   let cat = SponsorCategory(rawValue: seg.category),
                   enabledCategories.contains(cat) else { return nil }
+            let action = action(for: cat)
+            guard action != .show else { return nil }
             let start = seg.segment[0] / totalDuration
             let end   = seg.segment[1] / totalDuration
-            return SponsorSegment(id: seg.UUID, start: start, end: end, category: cat)
+            return SponsorSegment(id: seg.UUID, start: start, end: end, category: cat, action: action)
         }
     }
 

@@ -94,7 +94,6 @@ struct OnboardingView: View {
                 .padding(.bottom, FlowTheme.Spacing.xxl)
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

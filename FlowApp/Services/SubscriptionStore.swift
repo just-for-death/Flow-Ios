@@ -83,7 +83,12 @@ final class SubscriptionStore {
         for ch in incoming { subscribe(ch) }
     }
 
+    func isSubscribed(channelID: String) -> Bool {
+        channels.contains { $0.channelID == channelID }
+    }
+
     func addGroup(_ group: SubscriptionGroup) {
+        groups.removeAll { $0.name == group.name }
         groups.append(group)
         save()
     }

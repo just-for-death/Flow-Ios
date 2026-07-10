@@ -21,7 +21,9 @@ struct SettingsView: View {
     @AppStorage("prefQuality")    var prefQuality:    String = "1080p"
     @AppStorage("contentLanguage") var contentLanguage: String = "en"
     @AppStorage("contentRegion")   var contentRegion:   String = "US"
-    @AppStorage("autoplay")       var autoplay:       Bool   = true
+    @AppStorage("trending_region") var trendingRegion: String = "US"
+    @AppStorage("autoplay_enabled") var autoplay: Bool = true
+    @AppStorage("queue_autoplay_enabled") var queueAutoplay: Bool = true
     @AppStorage("resumePlayback") var resumePlayback: Bool   = true
 
     var body: some View {
@@ -35,7 +37,9 @@ struct SettingsView: View {
                         }
                     }
                     .onChange(of: prefQuality) { _, v in PlayerPreferences.shared.preferredQuality = v }
-                    Toggle("Autoplay Next Video", isOn: $autoplay)
+                    Toggle("Autoplay Related Videos", isOn: $autoplay)
+                        .onChange(of: autoplay) { _, v in UserDefaults.standard.set(v, forKey: "autoplay") }
+                    Toggle("Autoplay Queued Videos", isOn: $queueAutoplay)
                     Toggle("Resume Where You Left Off", isOn: $resumePlayback)
                 }
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
@@ -53,6 +57,7 @@ struct SettingsView: View {
 
                 Section("Content & Display") {
                     NavigationLink("Content Display") { ContentSettingsView() }
+                    NavigationLink("Navigation") { NavigationSettingsView() }
                     NavigationLink("Date & Time") { DateTimeSettingsView() }
                     NavigationLink("Search History") { SearchHistorySettingsView() }
                     NavigationLink("Time Management") { TimeManagementSettingsView() }
@@ -83,6 +88,14 @@ struct SettingsView: View {
                             Text($0).tag($0)
                         }
                     }
+                    Picker("Trending region", selection: $trendingRegion) {
+                        ForEach(["US", "GB", "CA", "AU", "IN", "DE", "FR", "JP", "BR"], id: \.self) {
+                            Text($0).tag($0)
+                        }
+                    }
+                }
+                .onChange(of: contentLanguage) { _, v in
+                    UserDefaults.standard.set(v, forKey: "app_language")
                 }
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
 
@@ -121,6 +134,16 @@ struct SettingsView: View {
                                 }
                             ))
                             .font(FlowTheme.Typography.bodyMedium)
+                            if sbCats.contains(cat) {
+                                Picker("\(cat.displayName) action", selection: Binding(
+                                    get: { SponsorBlockService.shared.action(for: cat) },
+                                    set: { SponsorBlockService.shared.setAction($0, for: cat) }
+                                )) {
+                                    ForEach(SponsorBlockService.CategoryAction.allCases, id: \.self) { action in
+                                        Text(action.displayName).tag(action)
+                                    }
+                                }
+                            }
                         }
                     }
                 } header: {
@@ -187,7 +210,6 @@ struct SettingsView: View {
             .background(FlowTheme.Colors.background)
             .navigationTitle("Settings")
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
-            .preferredColorScheme(.dark)
             .alert("Wipe Recommendation Data?", isPresented: $showWipeAlert) {
                 Button("Wipe", role: .destructive) { neuro.resetBrain() }
                 Button("Cancel", role: .cancel) {}
@@ -205,6 +227,8 @@ struct SettingsView: View {
 struct ImportDataSection: View {
     @State private var showSubsPicker = false
     @State private var showHistoryPicker = false
+    @State private var showFlowBackupPicker = false
+    @State private var showMasterBackupPicker = false
     @State private var resultMessage: String?
 
     var body: some View {
@@ -212,6 +236,10 @@ struct ImportDataSection: View {
             Button("Import Subscriptions (JSON)") { showSubsPicker = true }
                 .foregroundStyle(FlowTheme.Colors.onSurface)
             Button("Import Watch History (SQLite)") { showHistoryPicker = true }
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+            Button("Import Flow Backup (JSON)") { showFlowBackupPicker = true }
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+            Button("Import Master Backup (JSON/ZIP)") { showMasterBackupPicker = true }
                 .foregroundStyle(FlowTheme.Colors.onSurface)
         }
         .fileImporter(isPresented: $showSubsPicker, allowedContentTypes: [.json]) { result in
@@ -227,6 +255,36 @@ struct ImportDataSection: View {
                 Task {
                     let n = (try? await ImportService.importWatchHistoryDatabase(from: url)) ?? 0
                     resultMessage = "Imported \(n) watch history entries."
+                }
+            }
+        }
+        .fileImporter(isPresented: $showFlowBackupPicker, allowedContentTypes: [.json]) { result in
+            if case .success(let url) = result {
+                Task {
+                    do {
+                        let r = try await ImportService.importFlowBackupJSON(from: url)
+                        var msg = "Imported \(r.subscriptions) subs, \(r.history) history, \(r.settings) settings."
+                        if r.likes > 0 { msg += " \(r.likes) likes." }
+                        resultMessage = msg
+                    } catch {
+                        resultMessage = error.localizedDescription
+                    }
+                }
+            }
+        }
+        .fileImporter(isPresented: $showMasterBackupPicker, allowedContentTypes: [.json, .zip]) { result in
+            if case .success(let url) = result {
+                Task {
+                    do {
+                        let r = try await ImportService.importFlowMasterJSON(from: url)
+                        var msg = "Master import: \(r.subscriptions) subs, \(r.history) history"
+                        if r.brainImported { msg += ", brain restored" }
+                        if r.likes > 0 { msg += ", \(r.likes) likes" }
+                        msg += "."
+                        resultMessage = msg
+                    } catch {
+                        resultMessage = error.localizedDescription
+                    }
                 }
             }
         }
@@ -301,7 +359,6 @@ struct NeuroDashboardView: View {
         .scrollContentBackground(.hidden)
         .background(FlowTheme.Colors.background)
         .navigationTitle("FlowNeuro")
-        .preferredColorScheme(.dark)
     }
 }
 

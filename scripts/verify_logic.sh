@@ -89,6 +89,78 @@ print(classify(mux: mux, adaptive: adaptive))
 ')
 assert_eq "mux fallback separate from dash" "mux|video|audio" "$RESULT"
 
+# Android history percent (position/duration both ms)
+RESULT=$(swift -e '
+import Foundation
+func pct(_ positionMs: Int64, _ durationMs: Int64) -> String {
+    guard durationMs > 0 else { return "0" }
+    let ratio = Double(positionMs) / Double(durationMs)
+    let v = Swift.min(Swift.max(ratio, 0), 1)
+    return String(format: "%.2f", v)
+}
+print("\(pct(30_000, 120_000))|\(pct(120_000, 120_000))")
+')
+assert_eq "android history percent" "0.25|1.00" "$RESULT"
+
+# Brain merge watch history takes max
+RESULT=$(swift -e '
+func merge(_ a: [String: Float], _ b: [String: Float]) -> Float? {
+    var out = a
+    for (k, v) in b { out[k] = max(out[k] ?? 0, v) }
+    return out["v1"]
+}
+print(merge(["v1": 0.2], ["v1": 0.7]) ?? -1)
+')
+assert_eq "brain merge max progress" "0.7" "$RESULT"
+
+# PoToken descramble byte wrap (Kotlin (it + 97).toByte())
+RESULT=$(swift -e 'print(UInt8(200) &+ 97)')
+assert_eq "descramble byte wrap" "41" "$RESULT"
+
+# Semantic version compare (mirrors NotificationService)
+RESULT=$(swift -e '
+func newer(_ lhs: String, _ rhs: String) -> Bool {
+    let la = lhs.split(separator: ".").compactMap { Int($0) }
+    let ra = rhs.split(separator: ".").compactMap { Int($0) }
+    for i in 0..<Swift.max(la.count, ra.count) {
+        let l = i < la.count ? la[i] : 0
+        let r = i < ra.count ? ra[i] : 0
+        if l > r { return true }
+        if l < r { return false }
+    }
+    return false
+}
+print(newer("1.1.0", "1.0.0") ? "yes" : "no")
+')
+assert_eq "version compare newer" "yes" "$RESULT"
+
+# Nav tab reorder skips disabled tabs (mirrors NavTabManager.moveTab)
+RESULT=$(swift -e '
+func moveTab(tabOrder: [Int], enabled: [Int], move: Int, direction: Int) -> [Int] {
+    var ordered = enabled
+    guard let idx = ordered.firstIndex(of: move) else { return tabOrder }
+    let target = idx + direction
+    guard ordered.indices.contains(target) else { return tabOrder }
+    ordered.swapAt(idx, target)
+    let enabledSet = Set(enabled)
+    var iter = ordered.makeIterator()
+    var newOrder: [Int] = []
+    for raw in tabOrder {
+        if enabledSet.contains(raw) {
+            newOrder.append(iter.next() ?? raw)
+        } else {
+            newOrder.append(raw)
+        }
+    }
+    return newOrder
+}
+let order = [0, 1, 2, 3, 4, 5, 6]
+let enabled = [0, 2, 3, 4, 5, 6]
+let result = moveTab(tabOrder: order, enabled: enabled, move: 2, direction: -1)
+print(result.prefix(3).map(String.init).joined(separator: ","))
+')
+assert_eq "nav move skips disabled" "2,1,0" "$RESULT"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -gt 0 ]]; then exit 1; fi

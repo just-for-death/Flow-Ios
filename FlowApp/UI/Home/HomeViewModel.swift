@@ -36,7 +36,7 @@ final class HomeViewModel {
             case .sports:   return "GCsports"
             case .tech:     return "GCtech"
             case .news:     return "GCnews"
-            case .learning: return "UC9-y-6csu5WGm29I7JiwpnA"
+            case .learning: return "FEedu"
             }
         }
     }
@@ -89,7 +89,8 @@ final class HomeViewModel {
             let ranked = neuro.rank(candidates: page.videos, userSubs: subs)
             return HomeFeedPage(videos: ranked, continuation: page.continuation)
         } else if let browseID = category.browseID {
-            let data = try await InnerTubeClient.shared.browse(browseID: browseID)
+            let gl = category == .trending ? PlayerPreferences.shared.trendingRegion : nil
+            let data = try await InnerTubeClient.shared.browse(browseID: browseID, gl: gl)
             return try HomeFeedPage(json: data)
         }
         return try await InnerTubeClient.shared.fetchHomeFeed(continuation: continuation)

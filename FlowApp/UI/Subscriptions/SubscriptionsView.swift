@@ -46,7 +46,6 @@ struct SubscriptionsView: View {
                 Button("OK") { importMessage = nil }
             } message: { Text(importMessage ?? "") }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var emptyState: some View {

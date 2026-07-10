@@ -39,8 +39,14 @@ enum ExportService {
     }
 
     static func exportWatchHistoryJSON() throws -> Data {
-        let history = NeuroEngine.shared.brain.watchHistoryMap.map { ["videoId": $0.key, "pct": $0.value] }
-        return try JSONSerialization.data(withJSONObject: history, options: [.prettyPrinted, .sortedKeys])
+        let history = NeuroEngine.shared.brain.watchHistoryMap.map {
+            CanonicalWatchHistory(videoId: $0.key, progress: Double($0.value))
+        }
+        let lines = history.map { record -> String in
+            (try? JSONEncoder().encode(record)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }.filter { !$0.isEmpty }
+        let payload = lines.joined(separator: "\n")
+        return Data(payload.utf8)
     }
 
     static func exportBrainJSON() throws -> Data {
@@ -126,6 +132,8 @@ final class AutoBackupService {
                 task.setTaskCompleted(success: false)
                 return
             }
+            let accessed = folder.startAccessingSecurityScopedResource()
+            defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
             do {
                 try await runBackupNow(to: folder)
                 task.setTaskCompleted(success: true)

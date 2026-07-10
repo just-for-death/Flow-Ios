@@ -15,6 +15,7 @@ extension PlayerPreferences {
 
     // Playback
     var autoplayEnabled: Bool { get { bool("autoplay_enabled", default: true) } set { set(newValue, "autoplay_enabled") } }
+    var queueAutoplayEnabled: Bool { get { bool("queue_autoplay_enabled", default: true) } set { set(newValue, "queue_autoplay_enabled") } }
     var backgroundPlayEnabled: Bool { get { bool("background_play_enabled", default: true) } set { set(newValue, "background_play_enabled") } }
     var resumePlaybackEnabled: Bool { get { bool("resumePlayback", default: true) } set { set(newValue, "resumePlayback") } }
     var videoLoopEnabled: Bool { get { bool("video_loop_enabled", default: false) } set { set(newValue, "video_loop_enabled") } }
@@ -36,6 +37,7 @@ extension PlayerPreferences {
     var bottomNavHideOnScroll: Bool { get { bool("bottom_nav_hide_on_scroll", default: false) } set { set(newValue, "bottom_nav_hide_on_scroll") } }
     var shortsPlayerUiMode: String { get { string("shorts_player_ui_mode", default: "DEFAULT") } set { set(newValue, "shorts_player_ui_mode") } }
     var showRelatedVideos: Bool { get { bool("show_related_videos", default: true) } set { set(newValue, "show_related_videos") } }
+    var subtitlesEnabled: Bool { get { bool("subtitles_enabled", default: false) } set { set(newValue, "subtitles_enabled") } }
 
     // Search history
     var searchHistoryEnabled: Bool { get { bool("search_history_enabled", default: true) } set { set(newValue, "search_history_enabled") } }
@@ -76,6 +78,16 @@ extension PlayerPreferences {
     // App
     var appLanguage: String { get { string("app_language", default: "system") } set { set(newValue, "app_language") } }
     var trendingRegion: String { get { string("trending_region", default: "US") } set { set(newValue, "trending_region") } }
+
+    /// Wi‑Fi vs cellular quality for long-form playback.
+    var effectivePlaybackQuality: String {
+        NetworkPathMonitor.shared.isExpensive ? defaultQualityCellular : defaultQualityWifi
+    }
+
+    /// Wi‑Fi vs cellular quality for Shorts.
+    var effectiveShortsQuality: String {
+        NetworkPathMonitor.shared.isExpensive ? shortsQualityCellular : shortsQualityWifi
+    }
 
     // Helpers
     private var prefs: UserDefaults { UserDefaults.standard }

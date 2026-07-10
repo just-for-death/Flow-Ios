@@ -689,46 +689,27 @@ final class SyncManager {
                 payload[collection] = [String(data: data, encoding: .utf8) ?? ""]
 
             case SyncCollection.watchHistory:
+                let store = WatchHistoryStore.shared
                 let history = NeuroEngine.shared.brain.watchHistoryMap
-                payload[collection] = history.map { k, v in
-                    "{\"videoId\":\"\(k)\",\"pct\":\(v)}"
-                }
+                payload[collection] = history.map { videoId, progress in
+                    let meta = store.entry(for: videoId)
+                    let record = CanonicalWatchHistory(
+                        videoId: videoId,
+                        title: meta?.title ?? "",
+                        channelName: meta?.channelName ?? "",
+                        channelId: meta?.channelId ?? "",
+                        thumbnailUrl: meta?.thumbnailUrl ?? "",
+                        watchedAtMs: meta?.watchedAtMs ?? Int64(Date().timeIntervalSince1970 * 1000),
+                        progress: Double(progress),
+                        durationSeconds: meta?.durationSeconds ?? 0
+                    )
+                    guard let data = try? encoder.encode(record),
+                          let line = String(data: data, encoding: .utf8) else { return "" }
+                    return line
+                }.filter { !$0.isEmpty }
 
             case SyncCollection.settings:
-                // Serialize user settings
-                let defaults = UserDefaults.standard
-                let prefQuality = defaults.string(forKey: "prefQuality") ?? "1080p"
-                let shortsQualityWifi = defaults.string(forKey: "shorts_quality_wifi") ?? "720p"
-                let shortsQualityCellular = defaults.string(forKey: "shorts_quality_cellular") ?? "480p"
-                let bufferProfile = defaults.string(forKey: "buffer_profile") ?? "STABLE"
-                let themeMode = defaults.string(forKey: "theme_mode") ?? "DARK"
-                let contentLanguage = defaults.string(forKey: "contentLanguage") ?? "en"
-                let contentRegion = defaults.string(forKey: "contentRegion") ?? "US"
-                let autoplay = defaults.bool(forKey: "autoplay")
-                let resumePlayback = defaults.bool(forKey: "resumePlayback")
-                let dict: [String: AnyCodable] = [
-                    "prefQuality": AnyCodable(prefQuality),
-                    "shorts_quality_wifi": AnyCodable(shortsQualityWifi),
-                    "shorts_quality_cellular": AnyCodable(shortsQualityCellular),
-                    "buffer_profile": AnyCodable(bufferProfile),
-                    "theme_mode": AnyCodable(themeMode),
-                    "system_light_theme_mode": AnyCodable(defaults.string(forKey: "system_light_theme_mode") ?? "LIGHT"),
-                    "system_dark_theme_mode": AnyCodable(defaults.string(forKey: "system_dark_theme_mode") ?? "DARK"),
-                    "contentLanguage": AnyCodable(contentLanguage),
-                    "contentRegion": AnyCodable(contentRegion),
-                    "autoplay": AnyCodable(autoplay),
-                    "resumePlayback": AnyCodable(resumePlayback),
-                    "notifications_enabled": AnyCodable(defaults.bool(forKey: "notifications_enabled")),
-                    "auto_backup_frequency": AnyCodable(defaults.string(forKey: "auto_backup_frequency") ?? "NONE"),
-                    "shorts_playback_mode": AnyCodable(defaults.string(forKey: "shorts_playback_mode") ?? "loop"),
-                    "media_cache_size_mb": AnyCodable(defaults.integer(forKey: "media_cache_size_mb"))
-                ]
-                if let data = try? encoder.encode(dict),
-                   let jsonStr = String(data: data, encoding: .utf8) {
-                    payload[collection] = [jsonStr]
-                } else {
-                    payload[collection] = []
-                }
+                payload[collection] = SyncSettingsMapper.exportLines()
 
             case SyncCollection.playlists:
                 let lists = FlowDatabase.shared.getPlaylists()
@@ -749,13 +730,32 @@ final class SyncManager {
                 }
 
             case SyncCollection.subscriptions:
-                let subs = SubscriptionStore.shared.channels
-                payload[collection] = subs.compactMap { sub in
-                    if let data = try? encoder.encode(sub) {
-                        return String(data: data, encoding: .utf8)
+                let store = SubscriptionStore.shared
+                var lines: [String] = []
+                if store.groups.isEmpty, !store.channels.isEmpty {
+                    let group = CanonicalSubscriptionGroup(
+                        name: "Subscriptions",
+                        channelIds: store.channels.map(\.channelID).sorted()
+                    )
+                    if let data = try? encoder.encode(group),
+                       let line = String(data: data, encoding: .utf8) {
+                        lines.append(line)
                     }
-                    return nil
+                } else {
+                    for g in store.groups {
+                        let group = CanonicalSubscriptionGroup(
+                            name: g.name,
+                            channelIds: g.channelIDs,
+                            sortOrder: g.sortOrder,
+                            deleted: g.deleted
+                        )
+                        if let data = try? encoder.encode(group),
+                           let line = String(data: data, encoding: .utf8) {
+                            lines.append(line)
+                        }
+                    }
                 }
+                payload[collection] = lines
 
             default:
                 payload[collection] = []
@@ -774,34 +774,63 @@ final class SyncManager {
                 if let line = lines.first,
                    let data = line.data(using: .utf8),
                    let remoteBrain = try? JSONDecoder().decode(UserBrain.self, from: data) {
-                    // Simple merge: take the brain with more interactions
-                    let local = NeuroEngine.shared.brain
-                    if remoteBrain.totalInteractions > local.totalInteractions {
-                        try NeuroEngine.shared.importBrain(data)
-                    }
+                    try? NeuroEngine.shared.mergeBrain(remoteBrain)
                     stats[collection] = SyncApplyStats(added: 0, updated: 1, skipped: 0, tombstoned: 0)
                 }
 
             case SyncCollection.watchHistory:
                 var added = 0
                 for line in lines {
-                    if let data = line.data(using: .utf8),
-                       let entry = try? JSONDecoder().decode([String: AnyCodable].self, from: data),
-                       let videoId = entry["videoId"]?.value as? String {
-                            let pct = (entry["pct"]?.value as? Double ?? 0.0) / 100.0
-                            NeuroEngine.shared.updateWatchHistoryMap(videoId: videoId, percent: Float(pct))
-                            added += 1
-                        }
+                    guard let data = line.data(using: .utf8) else { continue }
+                    if let canonical = try? JSONDecoder().decode(CanonicalWatchHistory.self, from: data) {
+                        guard !canonical.deleted else { continue }
+                        let progress = Float(min(max(canonical.progress, 0), 1))
+                        NeuroEngine.shared.updateWatchHistoryMap(
+                            videoId: canonical.videoId,
+                            percent: progress
+                        )
+                        WatchHistoryStore.shared.importEntry(WatchHistoryEntry(
+                            videoId: canonical.videoId,
+                            title: canonical.title,
+                            channelName: canonical.channelName,
+                            channelId: canonical.channelId,
+                            thumbnailUrl: canonical.thumbnailUrl,
+                            watchedAtMs: canonical.watchedAtMs,
+                            progress: progress,
+                            durationSeconds: canonical.durationSeconds
+                        ))
+                        added += 1
+                        continue
                     }
+                    if let entry = try? JSONDecoder().decode([String: AnyCodable].self, from: data),
+                       let videoId = entry["videoId"]?.value as? String {
+                        let progress: Float
+                        if let p = entry["progress"]?.value as? Double {
+                            progress = Float(min(max(p, 0), 1))
+                        } else if let pct = entry["pct"]?.value as? Double {
+                            progress = Float(pct > 1 ? pct / 100.0 : min(max(pct, 0), 1))
+                        } else {
+                            continue
+                        }
+                        NeuroEngine.shared.updateWatchHistoryMap(videoId: videoId, percent: progress)
+                        added += 1
+                    }
+                }
                 stats[collection] = SyncApplyStats(added: added, updated: 0, skipped: lines.count - added, tombstoned: 0)
 
             case SyncCollection.settings:
                 var updated = 0
-                if let line = lines.first,
-                   let data = line.data(using: .utf8),
-                   let dict = try? JSONDecoder().decode([String: AnyCodable].self, from: data) {
+                for line in lines {
+                    if SyncSettingsMapper.applyLine(line) { updated += 1; continue }
+                    // Legacy single JSON blob from older iOS builds
+                    guard let data = line.data(using: .utf8),
+                          let dict = try? JSONDecoder().decode([String: AnyCodable].self, from: data) else { continue }
                     let defaults = UserDefaults.standard
-                    if let pq = dict["prefQuality"]?.value as? String { defaults.set(pq, forKey: "prefQuality"); updated += 1 }
+                    if let pq = dict["prefQuality"]?.value as? String {
+                        defaults.set(pq, forKey: "prefQuality")
+                        defaults.set(pq, forKey: "default_quality_wifi")
+                        updated += 1
+                    }
                     if let sq = dict["shorts_quality_wifi"]?.value as? String ?? dict["shortsQuality"]?.value as? String {
                         defaults.set(sq, forKey: "shorts_quality_wifi"); updated += 1
                     }
@@ -818,10 +847,18 @@ final class SyncManager {
                     }
                     if let hl = dict["contentLanguage"]?.value as? String { defaults.set(hl, forKey: "contentLanguage"); updated += 1 }
                     if let gl = dict["contentRegion"]?.value as? String { defaults.set(gl, forKey: "contentRegion"); updated += 1 }
-                    if let ap = dict["autoplay"]?.value as? Bool { defaults.set(ap, forKey: "autoplay"); updated += 1 }
+                    if let ap = dict["autoplay"]?.value as? Bool {
+                        defaults.set(ap, forKey: "autoplay_enabled")
+                        defaults.set(ap, forKey: "autoplay")
+                        updated += 1
+                    }
+                    if let qp = dict["queue_autoplay"]?.value as? Bool {
+                        defaults.set(qp, forKey: "queue_autoplay_enabled")
+                        updated += 1
+                    }
                     if let rp = dict["resumePlayback"]?.value as? Bool { defaults.set(rp, forKey: "resumePlayback"); updated += 1 }
                 }
-                stats[collection] = SyncApplyStats(added: 0, updated: updated, skipped: lines.count == 0 ? 0 : 1, tombstoned: 0)
+                stats[collection] = SyncApplyStats(added: 0, updated: updated, skipped: max(0, lines.count - updated), tombstoned: 0)
 
             case SyncCollection.playlists:
                 var incoming: [CanonicalPlaylist] = []
@@ -848,8 +885,25 @@ final class SyncManager {
             case SyncCollection.subscriptions:
                 var added = 0
                 for line in lines {
-                    if let data = line.data(using: .utf8),
-                       let sub = try? JSONDecoder().decode(ChannelSubscription.self, from: data) {
+                    guard let data = line.data(using: .utf8) else { continue }
+                    if let group = try? JSONDecoder().decode(CanonicalSubscriptionGroup.self, from: data) {
+                        guard !group.deleted else { continue }
+                        SubscriptionStore.shared.addGroup(SubscriptionGroup(
+                            name: group.name,
+                            channelIDs: group.channelIds,
+                            sortOrder: group.sortOrder,
+                            deleted: false
+                        ))
+                        for channelID in group.channelIds {
+                            SubscriptionStore.shared.subscribe(ChannelSubscription(
+                                channelID: channelID,
+                                channelName: channelID
+                            ))
+                            added += 1
+                        }
+                        continue
+                    }
+                    if let sub = try? JSONDecoder().decode(ChannelSubscription.self, from: data) {
                         SubscriptionStore.shared.subscribe(sub)
                         added += 1
                     }

@@ -55,6 +55,7 @@ final class ShortsPlayerPool {
 
         ownerIndex[slot] = index
         player.pause()
+        removeEndObserver(for: player.currentItem)
         player.replaceCurrentItem(with: nil)
 
         do {
@@ -76,7 +77,7 @@ final class ShortsPlayerPool {
                     player?.play()
                 }
                 endObservers[ObjectIdentifier(item)] = token
-            } else if mode == "auto_next" || mode == "auto_interval" {
+            } else if mode == "auto_next" {
                 let token = NotificationCenter.default.addObserver(
                     forName: .AVPlayerItemDidPlayToEndTime,
                     object: item,
@@ -149,7 +150,7 @@ final class ShortsPlayerPool {
 
     private func buildPlayerItem(for short: ShortVideo) async throws -> AVPlayerItem {
         let response = try await InnerTubeClient.shared.fetchPlayerInfo(videoID: short.id)
-        let quality = shortsQualityLabel()
+        let quality = PlayerPreferences.shared.effectiveShortsQuality
         let stream = try await response.toStreamInfo(videoID: short.id, preferredQuality: quality)
 
         if let vURL = stream.videoURL, let aURL = stream.audioURL {
@@ -188,14 +189,11 @@ final class ShortsPlayerPool {
         item.preferredForwardBufferDuration = PlayerPreferences.shared.shortsForwardBufferDuration
     }
 
-    private func shortsQualityLabel() -> String {
-        #if canImport(UIKit)
-        let isWifi = !ProcessInfo.processInfo.isLowPowerModeEnabled // rough proxy; prefer path monitor in production
-        #else
-        let isWifi = true
-        #endif
-        let prefs = PlayerPreferences.shared
-        return isWifi ? prefs.shortsQualityWifi : prefs.shortsQualityCellular
+    private func removeEndObserver(for item: AVPlayerItem?) {
+        guard let item else { return }
+        if let token = endObservers.removeValue(forKey: ObjectIdentifier(item)) {
+            NotificationCenter.default.removeObserver(token)
+        }
     }
 }
 

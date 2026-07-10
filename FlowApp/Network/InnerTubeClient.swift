@@ -38,12 +38,12 @@ struct InnerTubeContext: Encodable {
         var cronetVersion: String?
     }
 
-    static func web(visitorData: String? = nil) -> InnerTubeContext {
+    static func web(visitorData: String? = nil, hl: String? = nil, gl: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "WEB",
             clientVersion: "2.20240101.00.00",
-            hl: preferredHL,
-            gl: preferredGL,
+            hl: hl ?? preferredHL,
+            gl: gl ?? preferredGL,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             visitorData: visitorData
         ))
@@ -64,8 +64,8 @@ struct InnerTubeContext: Encodable {
         InnerTubeContext(client: Client(
             clientName: "IOS",
             clientVersion: "21.03.1",
-            hl: "en",
-            gl: "US",
+            hl: preferredHL,
+            gl: preferredGL,
             userAgent: "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)",
             visitorData: visitorData,
             osName: "iPhone",
@@ -79,8 +79,8 @@ struct InnerTubeContext: Encodable {
         InnerTubeContext(client: Client(
             clientName: "IOS",
             clientVersion: "21.03.1",
-            hl: "en",
-            gl: "US",
+            hl: preferredHL,
+            gl: preferredGL,
             userAgent: "com.google.ios.youtube/21.03.1 (iPad14,8; U; CPU OS 18_2 like Mac OS X;)",
             visitorData: visitorData,
             osName: "iPadOS",
@@ -305,19 +305,23 @@ final class InnerTubeClient {
 
     // MARK: - Next (related videos + comments)
     func fetchNextPage(videoID: String, continuation: String? = nil) async throws -> NextPage {
+        let raw = try await fetchNextRaw(videoID: videoID, continuation: continuation)
+        return try NextPage(json: raw)
+    }
+
+    func fetchNextRaw(videoID: String, continuation: String? = nil) async throws -> Data {
         var body: [String: Any] = [
             "context": encodeContext(.web(visitorData: visitorData)),
             "videoId": videoID
         ]
         if let cont = continuation { body["continuation"] = cont }
-        let raw = try await post(to: InnerTubeEndpoints.next(), body: body)
-        return try NextPage(json: raw)
+        return try await post(to: InnerTubeEndpoints.next(), body: body)
     }
 
     // MARK: - Browse (channel / playlist)
-    func browse(browseID: String, params: String? = nil) async throws -> Data {
+    func browse(browseID: String, params: String? = nil, hl: String? = nil, gl: String? = nil) async throws -> Data {
         var body: [String: Any] = [
-            "context":  encodeContext(.web(visitorData: visitorData)),
+            "context":  encodeContext(.web(visitorData: visitorData, hl: hl, gl: gl)),
             "browseId": browseID
         ]
         if let p = params { body["params"] = p }

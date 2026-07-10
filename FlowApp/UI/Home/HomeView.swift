@@ -5,7 +5,10 @@ struct HomeView: View {
 
     @Environment(NeuroEngine.self) private var neuro
     @Environment(FlowAVPlayer.self) private var player
+    @Environment(AppRouter.self) private var router
     @State private var vm = HomeViewModel()
+    @State private var prefs = PlayerPreferences.shared
+    @State private var shelfShorts: [ShortVideo] = []
 
     var body: some View {
         NavigationStack {
@@ -13,13 +16,23 @@ struct HomeView: View {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     // Category chips
                     Section {
+                        shelves
                         // Feed grid
                         feedContent
                     } header: {
                         categoryChips
                     }
                 }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("homeScroll")).minY
+                        )
+                    }
+                )
             }
+            .coordinateSpace(name: "homeScroll")
             .background(FlowTheme.Colors.background)
             .navigationTitle("Flow")
             .navigationBarTitleDisplayMode(.large)
@@ -36,8 +49,117 @@ struct HomeView: View {
             }
             .refreshable { vm.refresh(neuro: neuro) }
             .task { if vm.videos.isEmpty { vm.load(neuro: neuro) } }
+            .task { await loadShortsShelf() }
         }
-        .preferredColorScheme(.dark)
+    }
+
+    private var continueWatching: [WatchHistoryEntry] {
+        WatchHistoryStore.shared.continueWatching(threshold: max(0.05, prefs.watchedThreshold * 0.5))
+    }
+
+    @ViewBuilder
+    private var shelves: some View {
+        if !continueWatching.isEmpty {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+                Text("Continue watching")
+                    .font(FlowTheme.Typography.titleSmall)
+                    .foregroundStyle(FlowTheme.Colors.onSurface)
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: FlowTheme.Spacing.sm) {
+                        ForEach(continueWatching.prefix(12)) { entry in
+                            Button {
+                                let video = VideoItem(
+                                    id: entry.videoId,
+                                    title: entry.title.isEmpty ? "Video" : entry.title,
+                                    channelName: entry.channelName,
+                                    channelID: entry.channelId,
+                                    thumbnailURL: entry.thumbnailUrl.isEmpty
+                                        ? URL(string: "https://i.ytimg.com/vi/\(entry.videoId)/hqdefault.jpg")
+                                        : URL(string: entry.thumbnailUrl),
+                                    duration: entry.durationSeconds > 0 ? Int(entry.durationSeconds) : nil,
+                                    viewCount: nil, publishedAt: nil, isLive: false
+                                )
+                                player.play(video: video)
+                            } label: {
+                                ZStack(alignment: .bottom) {
+                                    AsyncImage(url: URL(string: entry.thumbnailUrl.isEmpty
+                                        ? "https://i.ytimg.com/vi/\(entry.videoId)/hqdefault.jpg" : entry.thumbnailUrl)) {
+                                        $0.resizable().aspectRatio(16/9, contentMode: .fill)
+                                    } placeholder: {
+                                        Rectangle().fill(FlowTheme.Colors.outline)
+                                    }
+                                    .frame(width: 200, height: 112)
+                                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
+                                    Rectangle()
+                                        .fill(FlowTheme.Colors.primary)
+                                        .frame(width: 200 * CGFloat(entry.progress), height: 3)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+                }
+            }
+            .padding(.bottom, FlowTheme.Spacing.sm)
+        }
+
+        if prefs.shortsShelfEnabled, !shelfShorts.isEmpty {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+                HStack {
+                    Text("Shorts")
+                        .font(FlowTheme.Typography.titleSmall)
+                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                    Spacer()
+                    Button("See all") { router.requestTab(.shorts) }
+                        .font(FlowTheme.Typography.labelLarge)
+                        .foregroundStyle(FlowTheme.Colors.primary)
+                }
+                .padding(.horizontal, FlowTheme.Spacing.md)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: FlowTheme.Spacing.sm) {
+                        ForEach(shelfShorts.prefix(8)) { short in
+                            Button { router.requestTab(.shorts) } label: {
+                                AsyncImage(url: short.thumbnailURL) {
+                                    $0.resizable().aspectRatio(9/16, contentMode: .fill)
+                                } placeholder: {
+                                    Rectangle().fill(FlowTheme.Colors.outline)
+                                }
+                                .frame(width: 90, height: 160)
+                                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+                }
+            }
+            .padding(.bottom, FlowTheme.Spacing.sm)
+        }
+    }
+
+    private func loadShortsShelf() async {
+        guard prefs.shortsShelfEnabled else { return }
+        if let page = try? await InnerTubeClient.shared.fetchShortsFeed() {
+            shelfShorts = page.shorts
+        }
+    }
+
+    private var displayedVideos: [VideoItem] {
+        guard prefs.hideWatchedVideos else { return vm.videos }
+        let threshold = prefs.watchedThreshold
+        return vm.videos.filter { video in
+            (neuro.brain.watchHistoryMap[video.id] ?? 0) < threshold
+        }
+    }
+
+    private var gridMinimum: CGFloat {
+        switch prefs.gridItemSize {
+        case "COMPACT": return sizeClass == .regular ? 220 : 130
+        case "LARGE":   return sizeClass == .regular ? 340 : 200
+        default:        return sizeClass == .regular ? 280 : 160
+        }
     }
 
     // MARK: - Category chips
@@ -74,23 +196,37 @@ struct HomeView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var videoGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: sizeClass == .regular ? 280 : 160))],
-            spacing: FlowTheme.Spacing.sm
-        ) {
-            ForEach(vm.videos) { video in
-                VideoCard(video: video) {
-                    player.play(video: video)
-                    neuro.onVideoInteraction(video: video, interaction: .watched(0)) // will update as video plays
-                }
-                .onAppear {
-                    if video.id == vm.videos.last?.id {
-                        vm.loadMore(neuro: neuro)
+        Group {
+            if prefs.homeViewMode == "LIST" {
+                LazyVStack(spacing: FlowTheme.Spacing.sm) {
+                    ForEach(displayedVideos) { video in
+                        videoRow(video)
                     }
                 }
+                .padding(FlowTheme.Spacing.sm)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: gridMinimum))],
+                    spacing: FlowTheme.Spacing.sm
+                ) {
+                    ForEach(displayedVideos) { video in
+                        videoRow(video)
+                    }
+                }
+                .padding(FlowTheme.Spacing.sm)
             }
         }
-        .padding(FlowTheme.Spacing.sm)
+    }
+
+    private func videoRow(_ video: VideoItem) -> some View {
+        DeArrowVideoCard(video: video) {
+            player.play(video: video)
+        }
+        .onAppear {
+            if video.id == displayedVideos.last?.id {
+                vm.loadMore(neuro: neuro)
+            }
+        }
     }
 
     private var loadingGrid: some View {
@@ -177,7 +313,7 @@ struct VideoCard: View {
                         .lineLimit(1)
 
                     if let views = video.viewCount, let pub = video.publishedAt {
-                        Text("\(views) • \(pub)")
+                        Text("\(views) • \(FlowDateFormatter.formatPublished(pub))")
                             .font(FlowTheme.Typography.labelSmall)
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.7))
                     }

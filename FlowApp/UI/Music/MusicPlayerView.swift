@@ -6,6 +6,7 @@ struct MusicHomeView: View {
     @State private var tracks:    [VideoItem] = []
     @State private var isLoading  = false
     @State private var showPlayer = false
+    @State private var showRecognition = false
 
     var body: some View {
         NavigationStack {
@@ -29,8 +30,20 @@ struct MusicHomeView: View {
             .background(FlowTheme.Colors.background)
             .navigationTitle("Music")
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showRecognition = true
+                    } label: {
+                        Image(systemName: "waveform.circle")
+                    }
+                    .accessibilityLabel("Identify song")
+                }
+            }
         }
-        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showRecognition) {
+            RecognitionView()
+        }
         .sheet(isPresented: $showPlayer) {
             MusicPlayerView()
                 .presentationDetents([.large])
@@ -271,7 +284,6 @@ struct MusicPlayerView: View {
                 Spacer()
             }
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showLyrics) {
             LyricsSheet()
                 .presentationDetents([.medium, .large])

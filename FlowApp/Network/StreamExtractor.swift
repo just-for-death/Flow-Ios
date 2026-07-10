@@ -126,20 +126,27 @@ enum StreamExtractor {
 
     private static func hasPlayableStreams(_ response: PlayerResponse, videoID: String) async throws -> Bool {
         guard response.playabilityStatus?.status == "OK" else { return false }
-        guard let formats = response.streamingData?.adaptiveFormats, !formats.isEmpty else { return false }
+        let adaptive = response.streamingData?.adaptiveFormats ?? []
+        let muxed = response.streamingData?.formats ?? []
+        guard !adaptive.isEmpty || !muxed.isEmpty else { return false }
 
-        NsigDecoder.prefetch(urls: formats.compactMap { $0.url.flatMap(URL.init) })
+        NsigDecoder.prefetch(urls: (adaptive + muxed).compactMap { $0.url.flatMap(URL.init) })
+
+        // Progressive muxed stream is always playable on its own.
+        for format in muxed where format.isVideo || format.mimeType?.contains("video") == true {
+            if await StreamURLResolver.resolveURL(for: format, videoID: videoID) != nil {
+                return true
+            }
+        }
 
         var hasVideo = false
         var hasAudio = false
-
-        for format in formats {
-            guard let url = await StreamURLResolver.resolveURL(for: format, videoID: videoID) else { continue }
+        for format in adaptive {
+            guard await StreamURLResolver.resolveURL(for: format, videoID: videoID) != nil else { continue }
             if format.isAudio { hasAudio = true }
-            if format.isVideo   { hasVideo = true }
-            _ = url // resolved successfully
+            if format.isVideo { hasVideo = true }
+            if hasVideo && hasAudio { return true }
         }
-
         return hasVideo && hasAudio
     }
 

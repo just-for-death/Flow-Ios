@@ -10,6 +10,7 @@ struct LibraryView: View {
         case liked     = "Liked"
         case downloads = "Downloads"
         case playlists = "Playlists"
+        case shorts    = "Saved Shorts"
     }
 
     var body: some View {
@@ -36,42 +37,48 @@ struct LibraryView: View {
                 case .liked:     LikedTab()
                 case .downloads: DownloadsTab()
                 case .playlists: PlaylistsTab()
+                case .shorts:    SavedShortsTab()
                 }
             }
             .background(FlowTheme.Colors.background)
             .navigationTitle("Library")
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
         }
-        .preferredColorScheme(.dark)
     }
 }
 
 // MARK: - History Tab
 struct HistoryTab: View {
-    @Environment(NeuroEngine.self) private var neuro
     @Environment(FlowAVPlayer.self) private var player
 
     var body: some View {
-        let historyKeys = Array(neuro.brain.watchHistoryMap.keys)
-        
-        if historyKeys.isEmpty {
+        let entries = WatchHistoryStore.shared.allEntriesSorted()
+
+        if entries.isEmpty {
             emptyState(icon: "clock", message: "Your watch history will appear here")
         } else {
             ScrollView {
                 LazyVStack(spacing: FlowTheme.Spacing.xs) {
-                    ForEach(historyKeys, id: \.self) { videoID in
-                        let pct = neuro.brain.watchHistoryMap[videoID] ?? 0
-                        HistoryRow(videoID: videoID, watchedFraction: CGFloat(pct)) {
+                    ForEach(entries) { entry in
+                        HistoryRow(
+                            videoID: entry.videoId,
+                            title: entry.title.isEmpty ? "Video \(entry.videoId)" : entry.title,
+                            channelName: entry.channelName,
+                            thumbnailURL: entry.thumbnailUrl.isEmpty
+                                ? URL(string: "https://i.ytimg.com/vi/\(entry.videoId)/hqdefault.jpg")
+                                : URL(string: entry.thumbnailUrl),
+                            watchedFraction: CGFloat(entry.progress)
+                        ) {
                             let v = VideoItem(
-                                id: videoID,
-                                title: "Video \(videoID)",
-                                channelName: "Channel",
-                                channelID: "",
-                                thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"),
-                                duration: nil,
-                                viewCount: nil,
-                                publishedAt: nil,
-                                isLive: false
+                                id: entry.videoId,
+                                title: entry.title.isEmpty ? "Video \(entry.videoId)" : entry.title,
+                                channelName: entry.channelName,
+                                channelID: entry.channelId,
+                                thumbnailURL: entry.thumbnailUrl.isEmpty
+                                    ? URL(string: "https://i.ytimg.com/vi/\(entry.videoId)/hqdefault.jpg")
+                                    : URL(string: entry.thumbnailUrl),
+                                duration: entry.durationSeconds > 0 ? Int(entry.durationSeconds) : nil,
+                                viewCount: nil, publishedAt: nil, isLive: false
                             )
                             player.play(video: v)
                         }
@@ -85,6 +92,9 @@ struct HistoryTab: View {
 
 struct HistoryRow: View {
     let videoID: String
+    var title: String
+    var channelName: String = ""
+    var thumbnailURL: URL?
     let watchedFraction: CGFloat
     let onTap: () -> Void
 
@@ -92,7 +102,7 @@ struct HistoryRow: View {
         Button(action: onTap) {
             HStack(spacing: FlowTheme.Spacing.md) {
                 ZStack(alignment: .bottomTrailing) {
-                    AsyncImage(url: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")) {
+                    AsyncImage(url: thumbnailURL ?? URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")) {
                         $0.resizable().aspectRatio(16/9, contentMode: .fill)
                     } placeholder: {
                         Rectangle().fill(FlowTheme.Colors.outline)
@@ -100,7 +110,6 @@ struct HistoryRow: View {
                     .frame(width: 100, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
 
-                    // Watch progress bar
                     GeometryReader { _ in
                         Rectangle()
                             .fill(FlowTheme.Colors.primary)
@@ -111,11 +120,11 @@ struct HistoryRow: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Video \(videoID)")
+                    Text(title)
                         .font(FlowTheme.Typography.bodyMedium)
                         .foregroundStyle(FlowTheme.Colors.onSurface)
                         .lineLimit(2)
-                    Text(String(format: "Watched %.0f%%", watchedFraction * 100))
+                    Text(channelName.isEmpty ? String(format: "Watched %.0f%%", watchedFraction * 100) : channelName)
                         .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }
@@ -212,6 +221,13 @@ struct DownloadsTab: View {
                                 DownloadRow(task: task)
                             }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    DownloadService.shared.cancelDownload(videoID: task.id)
+                                } label: {
+                                    Label(task.state == .downloading ? "Cancel" : "Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                     .padding(FlowTheme.Spacing.md)
@@ -260,46 +276,133 @@ struct DownloadRow: View {
 
 // MARK: - Playlists Tab
 struct PlaylistsTab: View {
-    private var db = FlowDatabase.shared
+    @Environment(FlowDatabase.self) private var db
+    @State private var showCreate = false
+    @State private var renameTarget: CanonicalPlaylist?
+    @State private var renameTitle = ""
 
     var body: some View {
-        let playlists = db.playlists.values
-            .filter { !$0.deleted }
-            .sorted(by: { $0.title < $1.title })
+        let playlists = db.userPlaylists()
 
         Group {
             if playlists.isEmpty {
-                emptyState(icon: "music.note.list", message: "Your playlists will appear here")
+                VStack(spacing: FlowTheme.Spacing.md) {
+                    emptyState(icon: "music.note.list", message: "Create a playlist to organize videos")
+                    Button("New Playlist") { showCreate = true }
+                        .buttonStyle(.borderedProminent)
+                }
             } else {
                 ScrollView {
+                    HStack {
+                        Spacer()
+                        Button { showCreate = true } label: {
+                            Label("New Playlist", systemImage: "plus")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+                    .padding(.top, FlowTheme.Spacing.sm)
+
                     LazyVStack(spacing: FlowTheme.Spacing.sm) {
                         ForEach(playlists, id: \.syncId) { pl in
-                            HStack(spacing: FlowTheme.Spacing.md) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: FlowTheme.Radius.sm)
-                                        .fill(FlowTheme.Colors.surfaceVariant)
-                                    Image(systemName: "music.note.list")
-                                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                            NavigationLink {
+                                LocalPlaylistDetailView(playlist: pl)
+                            } label: {
+                                HStack(spacing: FlowTheme.Spacing.md) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: FlowTheme.Radius.sm)
+                                            .fill(FlowTheme.Colors.surfaceVariant)
+                                        Image(systemName: "music.note.list")
+                                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                    }
+                                    .frame(width: 56, height: 56)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(pl.title)
+                                            .font(FlowTheme.Typography.bodyMedium)
+                                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                                            .lineLimit(1)
+                                        Text("\(pl.items.count) videos")
+                                            .font(FlowTheme.Typography.bodySmall)
+                                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                    }
+                                    Spacer()
                                 }
-                                .frame(width: 56, height: 56)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(pl.title)
-                                        .font(FlowTheme.Typography.bodyMedium)
-                                        .foregroundStyle(FlowTheme.Colors.onSurface)
-                                        .lineLimit(1)
-                                    Text("\(pl.items.count) tracks")
-                                        .font(FlowTheme.Typography.bodySmall)
-                                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                                }
-                                Spacer()
+                                .flowCard()
+                                .padding(FlowTheme.Spacing.sm)
                             }
-                            .flowCard()
-                            .padding(FlowTheme.Spacing.sm)
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Rename") {
+                                    renameTarget = pl
+                                    renameTitle = pl.title
+                                }
+                                if !pl.isProtected {
+                                    Button("Delete", role: .destructive) {
+                                        db.deletePlaylist(syncId: pl.syncId)
+                                    }
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if !pl.isProtected {
+                                    Button(role: .destructive) {
+                                        db.deletePlaylist(syncId: pl.syncId)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(FlowTheme.Spacing.md)
                 }
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            CreatePlaylistSheet(isPresented: $showCreate)
+        }
+        .alert("Rename playlist", isPresented: .init(
+            get: { renameTarget != nil },
+            set: { if !$0 { renameTarget = nil } }
+        )) {
+            TextField("Name", text: $renameTitle)
+            Button("Save") {
+                if let target = renameTarget {
+                    db.renamePlaylist(syncId: target.syncId, title: renameTitle)
+                }
+                renameTarget = nil
+            }
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+        }
+    }
+}
+
+// MARK: - Saved Shorts Tab
+struct SavedShortsTab: View {
+    @Environment(FlowAVPlayer.self) private var player
+    @Environment(AppRouter.self) private var router
+
+    var body: some View {
+        let ids = SavedShortsStore.shared.allIDs()
+        if ids.isEmpty {
+            emptyState(icon: "bookmark", message: "Shorts you save will appear here")
+        } else {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: FlowTheme.Spacing.sm) {
+                    ForEach(ids, id: \.self) { id in
+                        Button { router.openShort(id) } label: {
+                            AsyncImage(url: URL(string: "https://i.ytimg.com/vi/\(id)/oar2.jpg")) {
+                                $0.resizable().aspectRatio(9/16, contentMode: .fill)
+                            } placeholder: {
+                                Rectangle().fill(FlowTheme.Colors.outline)
+                            }
+                            .frame(height: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(FlowTheme.Spacing.md)
             }
         }
     }

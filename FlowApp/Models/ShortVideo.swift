@@ -10,6 +10,15 @@ struct ShortVideo: Identifiable, Hashable {
     let viewCountText: String?
     let sequenceParams: String?
 
+    /// Minimal placeholder when opening a saved short by ID.
+    static func placeholder(id: String) -> ShortVideo {
+        ShortVideo(
+            id: id, title: "Short", channelName: "", channelID: "",
+            thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(id)/oar2.jpg"),
+            viewCountText: nil, sequenceParams: nil
+        )
+    }
+
     var asVideoItem: VideoItem {
         VideoItem(
             id: id, title: title, channelName: channelName, channelID: channelID,

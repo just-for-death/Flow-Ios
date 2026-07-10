@@ -3,32 +3,36 @@ import SwiftUI
 // MARK: - ContentView (tab bar root)
 struct ContentView: View {
 
+    @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(FlowAVPlayer.self) private var player
-    @State private var selectedTab: Tab = .home
+    @Environment(NavTabManager.self) private var nav
+    @State private var selectedTab: NavTab = NavTabManager.shared.defaultTab()
     @State private var showingPlayer = false
+    @State private var hideTabBar = false
+    @State private var showOverflowMenu = false
 
-    enum Tab: String, CaseIterable {
-        case home          = "house.fill"
-        case shorts        = "play.rectangle.on.rectangle"
-        case subscriptions = "person.2.fill"
-        case search        = "magnifyingglass"
-        case music         = "music.note"
-        case library       = "folder.fill"
-        case settings      = "gearshape.fill"
+    private var enabledTabIDs: [Int] {
+        _ = nav.settingsRevision
+        return nav.enabledTabs().map(\.rawValue)
     }
 
     var body: some View {
         Group {
             if sizeClass == .regular {
-                // iPad Sidebar Layout
                 HStack(spacing: 0) {
-                    FlowTabBar(selected: $selectedTab, isSidebar: true)
-                    
+                    FlowTabBar(
+                        selected: $selectedTab,
+                        visibleTabs: nav.enabledTabs(),
+                        overflowTabs: [],
+                        isSidebar: true,
+                        onOverflow: nil
+                    )
+
                     ZStack(alignment: .bottom) {
                         mainContent
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
+
                         if player.currentVideo != nil && !showingPlayer && selectedTab != .shorts {
                             MiniPlayerBar(onTap: { showingPlayer = true })
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -36,7 +40,6 @@ struct ContentView: View {
                     }
                 }
             } else {
-                // iPhone Bottom Bar Layout
                 ZStack(alignment: .bottom) {
                     mainContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -46,7 +49,15 @@ struct ContentView: View {
                             MiniPlayerBar(onTap: { showingPlayer = true })
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        FlowTabBar(selected: $selectedTab, isSidebar: false)
+                        FlowTabBar(
+                            selected: $selectedTab,
+                            visibleTabs: nav.visibleTabs(),
+                            overflowTabs: nav.overflowTabs(),
+                            isSidebar: false,
+                            onOverflow: { showOverflowMenu = true }
+                        )
+                        .opacity(hideTabBar && PlayerPreferences.shared.bottomNavHideOnScroll ? 0 : 1)
+                        .offset(y: hideTabBar && PlayerPreferences.shared.bottomNavHideOnScroll ? 80 : 0)
                     }
                 }
             }
@@ -55,33 +66,67 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingPlayer) {
             VideoPlayerView(onDismiss: { showingPlayer = false })
         }
+        .confirmationDialog("More", isPresented: $showOverflowMenu, titleVisibility: .visible) {
+            ForEach(nav.overflowTabs()) { tab in
+                Button(tab.label) { selectedTab = tab }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .onAppear {
+            selectedTab = nav.defaultTab()
+        }
+        .onChange(of: enabledTabIDs) { _, ids in
+            if !ids.contains(selectedTab.rawValue) {
+                selectedTab = nav.defaultTab()
+            }
+        }
+        .onChange(of: player.currentVideo?.id) { _, id in
+            if id != nil { showingPlayer = true }
+        }
+        .onChange(of: router.requestedTab) { _, tab in
+            if let tab {
+                if nav.isEnabled(tab) { selectedTab = tab }
+                router.requestedTab = nil
+            }
+        }
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+            hideTabBar = offset < -40
+        }
         .animation(FlowTheme.Animation.standard, value: player.currentVideo?.id)
     }
 
+    @ViewBuilder
     private var mainContent: some View {
-        Group {
-            switch selectedTab {
-            case .home:          HomeView()
-            case .shorts:        ShortsView()
-            case .subscriptions: SubscriptionsView()
-            case .search:        SearchView()
-            case .music:         MusicHomeView()
-            case .library:       LibraryView()
-            case .settings:      SettingsView()
-            }
+        switch selectedTab {
+        case .home:          HomeView()
+        case .shorts:        ShortsView()
+        case .subscriptions: SubscriptionsView()
+        case .search:        SearchView()
+        case .music:         MusicHomeView()
+        case .library:       LibraryView()
+        case .settings:      SettingsView()
         }
     }
 }
 
+// MARK: - Scroll offset for bottom nav hide
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 // MARK: - FlowTabBar
 struct FlowTabBar: View {
-    @Binding var selected: ContentView.Tab
+    @Binding var selected: NavTab
+    let visibleTabs: [NavTab]
+    let overflowTabs: [NavTab]
     let isSidebar: Bool
+    let onOverflow: (() -> Void)?
 
     var body: some View {
         if isSidebar {
             VStack(spacing: FlowTheme.Spacing.xl) {
-                ForEach(ContentView.Tab.allCases, id: \.self) { tab in
+                ForEach(visibleTabs) { tab in
                     TabBarButton(tab: tab, isSelected: selected == tab) {
                         withAnimation(FlowTheme.Animation.standard) { selected = tab }
                     }
@@ -91,18 +136,26 @@ struct FlowTabBar: View {
             .padding(.horizontal, FlowTheme.Spacing.md)
             .padding(.top, FlowTheme.Spacing.xl * 2)
             .frame(width: 80)
-            .background(
-                FlowTheme.Colors.surfaceVariant
-                    .ignoresSafeArea()
-            )
+            .background(FlowTheme.Colors.surfaceVariant.ignoresSafeArea())
             .overlay(alignment: .trailing) {
                 Rectangle().fill(FlowTheme.Colors.outline).frame(width: 0.5).ignoresSafeArea()
             }
         } else {
             HStack(spacing: 0) {
-                ForEach(ContentView.Tab.allCases, id: \.self) { tab in
+                ForEach(visibleTabs) { tab in
                     TabBarButton(tab: tab, isSelected: selected == tab) {
                         withAnimation(FlowTheme.Animation.standard) { selected = tab }
+                    }
+                }
+                if !overflowTabs.isEmpty {
+                    TabBarButton(
+                        tab: nil,
+                        overflowSelected: overflowTabs.contains(selected),
+                        isSelected: overflowTabs.contains(selected),
+                        symbol: "ellipsis",
+                        label: "More"
+                    ) {
+                        onOverflow?()
                     }
                 }
             }
@@ -120,14 +173,32 @@ struct FlowTabBar: View {
 }
 
 struct TabBarButton: View {
-    let tab: ContentView.Tab
+    let tab: NavTab?
+    var overflowSelected: Bool = false
     let isSelected: Bool
+    var symbol: String?
+    var label: String?
     let action: () -> Void
+
+    init(tab: NavTab, isSelected: Bool, action: @escaping () -> Void) {
+        self.tab = tab
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    init(tab: NavTab?, overflowSelected: Bool, isSelected: Bool, symbol: String, label: String, action: @escaping () -> Void) {
+        self.tab = tab
+        self.overflowSelected = overflowSelected
+        self.isSelected = isSelected
+        self.symbol = symbol
+        self.label = label
+        self.action = action
+    }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(systemName: tab.rawValue)
+                Image(systemName: symbol ?? tab?.symbol ?? "circle")
                     .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? FlowTheme.Colors.primary : FlowTheme.Colors.onSurfaceVariant)
                     .scaleEffect(isSelected ? 1.1 : 1.0)
@@ -171,10 +242,22 @@ struct MiniPlayerBar: View {
             Spacer()
 
             HStack(spacing: FlowTheme.Spacing.sm) {
+                Button { player.playPreviousInQueue() } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                }.buttonStyle(.plain)
+
                 Button { player.togglePlayPause() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(FlowTheme.Colors.onSurface)
+                }.buttonStyle(.plain)
+
+                Button { player.playNextInQueue() } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 }.buttonStyle(.plain)
 
                 Button { player.stop() } label: {
@@ -204,10 +287,8 @@ struct MiniPlayerBar: View {
             DragGesture(minimumDistance: 20)
                 .onEnded { value in
                     if value.translation.height < -20 {
-                        // Swipe up: expand
                         onTap()
                     } else if value.translation.height > 20 {
-                        // Swipe down: close
                         player.stop()
                     }
                 }

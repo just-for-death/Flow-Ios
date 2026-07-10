@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 // MARK: - DownloadTask model
 struct DownloadTask: Identifiable, Codable {
@@ -23,6 +24,7 @@ final class DownloadService: NSObject {
 
     private(set) var activeTasks: [String: DownloadTask] = [:]
     private(set) var metadataStore: [String: DownloadTask] = [:]
+    private var pendingDownloads: [(VideoItem, StreamInfo?)] = []
     var backgroundCompletionHandler: (() -> Void)?
     private var urlSession: URLSession!
 
@@ -50,31 +52,129 @@ final class DownloadService: NSObject {
     }
 
     // MARK: - Start download
-    func download(video: VideoItem, stream: StreamInfo) {
-        // Only progressive muxed streams are valid single-file downloads.
-        // Adaptive DASH tracks are separate video/audio — do not download audio-only or video-only by mistake.
-        guard let url = stream.fallbackURL else { return }
-        guard activeTasks[video.id] == nil else { return }
+    func download(video: VideoItem, stream: StreamInfo? = nil) {
+        Task { await enqueueDownload(video: video, stream: stream) }
+    }
 
+    @MainActor
+    private func enqueueDownload(video: VideoItem, stream: StreamInfo?) async {
+        let prefs = PlayerPreferences.shared
+        if prefs.downloadOverWifiOnly && NetworkPathMonitor.shared.isExpensive { return }
+        guard activeTasks[video.id]?.state != .downloading else { return }
+
+        let maxConcurrent = prefs.parallelDownloadEnabled ? max(1, prefs.downloadThreads) : 1
+        let activeCount = activeTasks.values.filter { $0.state == .downloading }.count
+        if activeCount >= maxConcurrent {
+            if !pendingDownloads.contains(where: { $0.0.id == video.id }) {
+                pendingDownloads.append((video, stream))
+            }
+            return
+        }
+
+        let resolvedStream: StreamInfo
+        if let stream {
+            resolvedStream = stream
+        } else {
+            do {
+                let info = try await InnerTubeClient.shared.fetchPlayerInfo(videoID: video.id)
+                resolvedStream = try await info.toStreamInfo(
+                    videoID: video.id,
+                    preferredQuality: prefs.defaultDownloadQuality
+                )
+            } catch {
+                return
+            }
+        }
+        startResolvedDownload(video: video, stream: resolvedStream)
+    }
+
+    @MainActor
+    private func startResolvedDownload(video: VideoItem, stream: StreamInfo) {
+        if let mux = stream.fallbackURL {
+            startURLDownload(video: video, url: mux)
+        } else if let videoURL = stream.videoURL, let audioURL = stream.audioURL {
+            Task { await downloadDASH(video: video, videoURL: videoURL, audioURL: audioURL) }
+        }
+    }
+
+    @MainActor
+    private func drainDownloadQueue() async {
+        let prefs = PlayerPreferences.shared
+        let maxConcurrent = prefs.parallelDownloadEnabled ? max(1, prefs.downloadThreads) : 1
+        while activeTasks.values.filter({ $0.state == .downloading }).count < maxConcurrent,
+              !pendingDownloads.isEmpty {
+            let (video, stream) = pendingDownloads.removeFirst()
+            await enqueueDownload(video: video, stream: stream)
+        }
+    }
+
+    private func startURLDownload(video: VideoItem, url: URL) {
         let task = urlSession.downloadTask(with: url)
         let dt = DownloadTask(
-            id:           video.id,
-            title:        video.title,
-            channelName:  video.channelName,
-            thumbnailURL: video.thumbnailURL,
-            progress:     0,
-            state:        .downloading,
-            localURL:     nil
+            id: video.id, title: video.title, channelName: video.channelName,
+            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading, localURL: nil
         )
         activeTasks[video.id] = dt
         metadataStore[video.id] = dt
         saveMetadata()
-        
         task.taskDescription = video.id
         task.resume()
     }
 
+    @MainActor
+    private func downloadDASH(video: VideoItem, videoURL: URL, audioURL: URL) async {
+        let dt = DownloadTask(
+            id: video.id, title: video.title, channelName: video.channelName,
+            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading, localURL: nil
+        )
+        activeTasks[video.id] = dt
+        metadataStore[video.id] = dt
+        saveMetadata()
+
+        do {
+            let composition = AVMutableComposition()
+            let videoAsset = AVURLAsset(url: videoURL)
+            let audioAsset = AVURLAsset(url: audioURL)
+            guard let vTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+                  let aTrack = try await audioAsset.loadTracks(withMediaType: .audio).first,
+                  let compV = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+                  let compA = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                throw InnerTubeError.noStreamsAvailable
+            }
+            let duration = CMTimeMinimum(try await videoAsset.load(.duration), try await audioAsset.load(.duration))
+            let range = CMTimeRange(start: .zero, duration: duration)
+            try compV.insertTimeRange(range, of: vTrack, at: .zero)
+            try compA.insertTimeRange(range, of: aTrack, at: .zero)
+
+            let dest = documentsURL.appendingPathComponent("\(video.id).mp4")
+            try? FileManager.default.removeItem(at: dest)
+            guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+                throw InnerTubeError.noStreamsAvailable
+            }
+            export.outputURL = dest
+            export.outputFileType = .mp4
+            activeTasks[video.id]?.progress = 0.5
+            await export.export()
+            guard export.status == .completed else { throw export.error ?? InnerTubeError.noStreamsAvailable }
+
+            activeTasks[video.id]?.state = .completed
+            activeTasks[video.id]?.progress = 1
+            activeTasks[video.id]?.localURL = dest
+            metadataStore[video.id] = activeTasks[video.id]
+            saveMetadata()
+            await NotificationService.shared.notifyDownloadComplete(title: video.title)
+            await drainDownloadQueue()
+        } catch {
+            activeTasks[video.id]?.state = .failed
+            metadataStore[video.id]?.state = .failed
+            saveMetadata()
+            await drainDownloadQueue()
+        }
+    }
+
+    @MainActor
     func cancelDownload(videoID: String) {
+        pendingDownloads.removeAll { $0.0.id == videoID }
         activeTasks.removeValue(forKey: videoID)
         metadataStore.removeValue(forKey: videoID)
         saveMetadata()
@@ -86,6 +186,7 @@ final class DownloadService: NSObject {
         urlSession.getAllTasks { tasks in
             tasks.first { $0.taskDescription == videoID }?.cancel()
         }
+        Task { await drainDownloadQueue() }
     }
 
     // MARK: - List completed downloads
@@ -130,7 +231,10 @@ extension DownloadService: URLSessionDownloadDelegate {
             self.metadataStore[videoID]?.localURL = dest
             self.saveMetadata()
             let title = self.metadataStore[videoID]?.title ?? videoID
-            Task { await NotificationService.shared.notifyDownloadComplete(title: title) }
+            Task {
+                await NotificationService.shared.notifyDownloadComplete(title: title)
+                await self.drainDownloadQueue()
+            }
         }
     }
 
@@ -142,6 +246,7 @@ extension DownloadService: URLSessionDownloadDelegate {
             self.activeTasks[videoID]?.state = .failed
             self.metadataStore[videoID]?.state = .failed
             self.saveMetadata()
+            Task { await self.drainDownloadQueue() }
         }
     }
 

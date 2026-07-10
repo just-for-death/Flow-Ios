@@ -42,7 +42,6 @@ struct SyncView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Mode chooser

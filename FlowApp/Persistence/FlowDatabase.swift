@@ -128,4 +128,83 @@ final class FlowDatabase {
 
     func getPlaylists() -> [CanonicalPlaylist] { Array(playlists.values) }
     func getLikes() -> [CanonicalLike] { Array(likes.values) }
+
+    func isLiked(kind: String, id: String) -> Bool {
+        let key = "\(kind)_\(id)"
+        return likes[key]?.state == CanonicalLike.STATE_LIKED
+    }
+
+    func setLiked(_ liked: Bool, video: VideoItem, kind: String = CanonicalLike.KIND_VIDEO) {
+        let key = "\(kind)_\(video.id)"
+        if liked {
+            let like = CanonicalLike(
+                kind: kind, id: video.id, state: CanonicalLike.STATE_LIKED,
+                updatedAtMs: Int64(Date().timeIntervalSince1970 * 1000), hlc: UUID().uuidString,
+                meta: CanonicalLikeMeta(title: video.title, artist: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""),
+                title: video.title, channelName: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
+            )
+            likes[key] = like
+        } else {
+            likes.removeValue(forKey: key)
+        }
+        save()
+    }
+
+    // MARK: - Playlist CRUD
+    @discardableResult
+    func createPlaylist(title: String, isMusic: Bool = false) -> CanonicalPlaylist {
+        let id = UUID().uuidString
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let playlist = CanonicalPlaylist(
+            syncId: id,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Playlist" : title,
+            isMusic: isMusic,
+            isUserCreated: true,
+            createdAtMs: now,
+            updatedHlc: UUID().uuidString
+        )
+        playlists[id] = playlist
+        save()
+        return playlist
+    }
+
+    func renamePlaylist(syncId: String, title: String) {
+        guard var pl = playlists[syncId] else { return }
+        pl.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        pl.updatedHlc = UUID().uuidString
+        playlists[syncId] = pl
+        save()
+    }
+
+    func deletePlaylist(syncId: String) {
+        guard var pl = playlists[syncId], !pl.isProtected else { return }
+        pl.deleted = true
+        pl.updatedHlc = UUID().uuidString
+        playlists[syncId] = pl
+        save()
+    }
+
+    func addToPlaylist(syncId: String, item: CanonicalPlaylistItem) {
+        guard var pl = playlists[syncId], !pl.deleted else { return }
+        if !pl.items.contains(where: { $0.videoId == item.videoId && !$0.deleted }) {
+            pl.items.append(item)
+        }
+        pl.updatedHlc = UUID().uuidString
+        playlists[syncId] = pl
+        save()
+    }
+
+    func removeFromPlaylist(syncId: String, videoId: String) {
+        guard var pl = playlists[syncId] else { return }
+        pl.items.removeAll { $0.videoId == videoId }
+        pl.updatedHlc = UUID().uuidString
+        playlists[syncId] = pl
+        save()
+    }
+
+    func userPlaylists() -> [CanonicalPlaylist] {
+        playlists.values
+            .filter { !$0.deleted && $0.isUserCreated }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
 }

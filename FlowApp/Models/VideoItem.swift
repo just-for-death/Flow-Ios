@@ -116,7 +116,9 @@ struct SponsorSegment: Identifiable, Codable {
     let start: Double   // fraction of total duration (0…1)
     let end: Double
     let category: SponsorCategory
-    var skipAutomatically: Bool { category.shouldAutoSkip }
+    var action: SponsorBlockService.CategoryAction = .skip
+    var skipAutomatically: Bool { action == .skip }
+    var shouldMute: Bool { action == .mute }
 }
 
 enum SponsorCategory: String, Codable, CaseIterable {

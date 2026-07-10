@@ -26,6 +26,9 @@ struct NotificationsSettingsView: View {
                 }
             }
             Section {
+                NavigationLink("Notification inbox") {
+                    NotificationInboxView()
+                }
                 Button("Open System Notification Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
@@ -42,6 +45,50 @@ struct NotificationsSettingsView: View {
         if minutes < 60 { return "\(minutes) min" }
         if minutes < 1440 { return "\(minutes / 60) hr" }
         return "24 hr"
+    }
+}
+
+// MARK: - NotificationInboxView
+struct NotificationInboxView: View {
+    @State private var inbox = NotificationInbox.shared
+
+    var body: some View {
+        List {
+            if inbox.items.isEmpty {
+                Text("No notifications yet")
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+            } else {
+                ForEach(inbox.items) { note in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(note.title)
+                                .font(FlowTheme.Typography.bodyMedium)
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            if !note.read {
+                                Circle().fill(FlowTheme.Colors.primary).frame(width: 8, height: 8)
+                            }
+                        }
+                        Text(note.body)
+                            .font(FlowTheme.Typography.bodySmall)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        Text(FlowDateFormatter.format(date: Date(timeIntervalSince1970: note.createdAt)))
+                            .font(FlowTheme.Typography.labelSmall)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant.opacity(0.7))
+                    }
+                    .onAppear { inbox.markRead(note.id) }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden).background(FlowTheme.Colors.background)
+        .navigationTitle("Inbox")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Mark all read") { inbox.markAllRead() }
+                    Button("Clear", role: .destructive) { inbox.clear() }
+                } label: { Image(systemName: "ellipsis.circle") }
+            }
+        }
     }
 }
 
@@ -143,6 +190,15 @@ struct AutoBackupSettingsView: View {
 
     private func runBackupTo(_ url: URL) async {
         do {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            if let bookmark = try? url.bookmarkData(
+                options: .minimalBookmark,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) {
+                prefs.autoBackupFolderBookmark = bookmark
+            }
             try await AutoBackupService.shared.runBackupNow(to: url)
             message = "Backup saved successfully."
         } catch {
@@ -238,11 +294,66 @@ struct ContentSettingsView: View {
             Toggle("Shorts shelf on Home", isOn: Binding(get: { prefs.shortsShelfEnabled }, set: { prefs.shortsShelfEnabled = $0 }))
             Toggle("Hide watched videos", isOn: Binding(get: { prefs.hideWatchedVideos }, set: { prefs.hideWatchedVideos = $0 }))
             Toggle("Show related videos", isOn: Binding(get: { prefs.showRelatedVideos }, set: { prefs.showRelatedVideos = $0 }))
+            Toggle("Subtitles enabled", isOn: Binding(get: { prefs.subtitlesEnabled }, set: { prefs.subtitlesEnabled = $0 }))
             Toggle("Comments enabled", isOn: Binding(get: { prefs.commentsEnabled }, set: { prefs.commentsEnabled = $0 }))
             Toggle("Hide bottom nav on scroll", isOn: Binding(get: { prefs.bottomNavHideOnScroll }, set: { prefs.bottomNavHideOnScroll = $0 }))
+
+            Section("Navigation") {
+                NavigationLink("Customize tabs") { NavigationSettingsView() }
+            }
         }
         .scrollContentBackground(.hidden).background(FlowTheme.Colors.background)
         .navigationTitle("Content Display")
+    }
+}
+
+// MARK: - NavigationSettingsView
+struct NavigationSettingsView: View {
+    @Environment(NavTabManager.self) private var nav
+
+    var body: some View {
+        let _ = nav.settingsRevision
+        List {
+            Section("Visible tabs") {
+                Toggle("Shorts tab", isOn: Binding(get: { nav.shortsNavigationEnabled }, set: { nav.shortsNavigationEnabled = $0 }))
+                Toggle("Music tab", isOn: Binding(get: { nav.musicNavigationEnabled }, set: { nav.musicNavigationEnabled = $0 }))
+                Toggle("Search tab", isOn: Binding(get: { nav.searchNavTabEnabled }, set: { nav.searchNavTabEnabled = $0 }))
+            }
+
+            Section("Tab order") {
+                ForEach(nav.enabledTabs()) { tab in
+                    HStack {
+                        Image(systemName: tab.symbol)
+                            .frame(width: 28)
+                        Text(tab.label)
+                        Spacer()
+                        Button { nav.moveTab(tab, direction: -1) } label: {
+                            Image(systemName: "chevron.up")
+                        }.buttonStyle(.borderless)
+                        Button { nav.moveTab(tab, direction: 1) } label: {
+                            Image(systemName: "chevron.down")
+                        }.buttonStyle(.borderless)
+                    }
+                }
+            }
+
+            Section("Default tab") {
+                Picker("Open on launch", selection: Binding(get: { nav.defaultTabIndex }, set: { nav.defaultTabIndex = $0 })) {
+                    ForEach(nav.enabledTabs()) { tab in
+                        Text(tab.label).tag(tab.rawValue)
+                    }
+                }
+            }
+
+            Section {
+                Text("Up to \(NavTabManager.maxVisibleTabs) tabs show in the bottom bar. Extra tabs appear under More.")
+                    .font(FlowTheme.Typography.bodySmall)
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(FlowTheme.Colors.background)
+        .navigationTitle("Navigation")
     }
 }
 
@@ -286,12 +397,18 @@ struct TimeManagementSettingsView: View {
     @State private var prefs = PlayerPreferences.shared
     var body: some View {
         List {
-            Toggle("Bedtime reminder", isOn: Binding(get: { prefs.bedtimeReminderEnabled }, set: { prefs.bedtimeReminderEnabled = $0 }))
+            Toggle("Bedtime reminder", isOn: Binding(get: { prefs.bedtimeReminderEnabled }, set: {
+                prefs.bedtimeReminderEnabled = $0
+                ReminderService.shared.rescheduleAll()
+            }))
             if prefs.bedtimeReminderEnabled {
                 Stepper("Bedtime hour: \(prefs.bedtimeStartHour)", value: Binding(
                     get: { prefs.bedtimeStartHour }, set: { prefs.bedtimeStartHour = $0 }), in: 0...23)
             }
-            Toggle("Break reminders", isOn: Binding(get: { prefs.breakReminderEnabled }, set: { prefs.breakReminderEnabled = $0 }))
+            Toggle("Break reminders", isOn: Binding(get: { prefs.breakReminderEnabled }, set: {
+                prefs.breakReminderEnabled = $0
+                ReminderService.shared.rescheduleAll()
+            }))
             if prefs.breakReminderEnabled {
                 Stepper("Every \(prefs.breakFrequencyMinutes) min", value: Binding(
                     get: { prefs.breakFrequencyMinutes }, set: { prefs.breakFrequencyMinutes = $0 }), in: 15...180, step: 15)
@@ -371,15 +488,63 @@ struct DonationsSettingsView: View {
 
 // MARK: - AppIconSettingsView
 struct AppIconSettingsView: View {
+    @State private var selected = AppIconManager.current
+    @State private var error: String?
+
+    private let columns = [GridItem(.adaptive(minimum: 88), spacing: 12)]
+
     var body: some View {
-        List {
-            Section {
-                Text("Alternate app icons can be added via CFBundleAlternateIcons in Info.plist. The default Flow icon is currently active.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.md) {
+                Text("Changing the icon closes and reopens Flow on the home screen. This matches Android alternate launcher icons.")
+                    .font(FlowTheme.Typography.bodySmall)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                LabeledContent("Active icon", value: "Default")
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(FlowAppIcon.allCases) { icon in
+                        Button {
+                            Task {
+                                do {
+                                    try await AppIconManager.setIcon(icon)
+                                    selected = icon
+                                } catch {
+                                    self.error = error.localizedDescription
+                                }
+                            }
+                        } label: {
+                            VStack(spacing: 8) {
+                                RoundedRectangle(cornerRadius: 18)
+                                    .fill(icon.previewColor)
+                                    .frame(width: 72, height: 72)
+                                    .overlay {
+                                        Image(systemName: "play.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(icon.previewColor == .white ? .black : .white)
+                                    }
+                                    .overlay {
+                                        if selected == icon {
+                                            RoundedRectangle(cornerRadius: 18)
+                                                .stroke(FlowTheme.Colors.primary, lineWidth: 3)
+                                        }
+                                    }
+                                Text(icon.displayName)
+                                    .font(FlowTheme.Typography.labelSmall)
+                                    .foregroundStyle(FlowTheme.Colors.onSurface)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, FlowTheme.Spacing.md)
             }
+            .padding(.vertical, FlowTheme.Spacing.md)
         }
-        .scrollContentBackground(.hidden).background(FlowTheme.Colors.background)
+        .background(FlowTheme.Colors.background)
         .navigationTitle("App Icon")
+        .alert("Could not change icon", isPresented: .init(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK") { error = nil }
+        } message: { Text(error ?? "") }
     }
 }

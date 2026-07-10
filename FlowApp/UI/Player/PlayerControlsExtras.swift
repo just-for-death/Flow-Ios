@@ -56,3 +56,65 @@ struct QualityPickerMenu: View {
         Int(q.replacingOccurrences(of: "p", with: "")) ?? 0
     }
 }
+
+// MARK: - QueueSheet
+struct QueueSheet: View {
+    @Environment(FlowAVPlayer.self) private var player
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let queue = PlaybackQueue.shared
+        NavigationStack {
+            List {
+                if queue.items.isEmpty {
+                    Text("Queue is empty")
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                } else {
+                    ForEach(Array(queue.items.enumerated()), id: \.element.id) { index, video in
+                        Button {
+                            player.playQueue(queue.items, startIndex: index)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: FlowTheme.Spacing.sm) {
+                                AsyncImage(url: video.thumbnailURL) { $0.resizable().aspectRatio(16/9, contentMode: .fill) }
+                                    placeholder: { Rectangle().fill(FlowTheme.Colors.outline) }
+                                    .frame(width: 80, height: 45)
+                                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.sm))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(video.title)
+                                        .font(FlowTheme.Typography.bodyMedium)
+                                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                                        .lineLimit(2)
+                                    Text(video.channelName)
+                                        .font(FlowTheme.Typography.bodySmall)
+                                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                }
+                                Spacer()
+                                if index == queue.currentIndex {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .foregroundStyle(FlowTheme.Colors.primary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete { offsets in
+                        for i in offsets { queue.remove(at: i) }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(FlowTheme.Colors.background)
+            .navigationTitle("Queue (\(queue.items.count))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Clear") { queue.clear() }.disabled(queue.items.isEmpty)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}

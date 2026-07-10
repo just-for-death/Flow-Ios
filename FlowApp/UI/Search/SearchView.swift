@@ -10,8 +10,10 @@ struct SearchView: View {
     @State private var isLoading    = false
     @State private var error:       Error?
     @State private var isFocused    = false
+    @State private var searchHistory: [String] = []
 
     private let client = InnerTubeClient.shared
+    private let historyKey = "search_history"
 
     var body: some View {
         NavigationStack {
@@ -35,8 +37,8 @@ struct SearchView: View {
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
+            .onAppear { reloadSearchHistory() }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Search bar
@@ -79,32 +81,14 @@ struct SearchView: View {
     @ViewBuilder
     private var suggestionsOrEmpty: some View {
         if !suggestions.isEmpty {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button {
-                            query = suggestion
-                            performSearch()
-                        } label: {
-                            HStack(spacing: FlowTheme.Spacing.md) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                                Text(suggestion)
-                                    .font(FlowTheme.Typography.bodyMedium)
-                                    .foregroundStyle(FlowTheme.Colors.onSurface)
-                                Spacer()
-                                Image(systemName: "arrow.up.left")
-                                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                                    .font(.caption)
-                            }
-                            .padding(.horizontal, FlowTheme.Spacing.md)
-                            .padding(.vertical, FlowTheme.Spacing.sm + 2)
-                        }
-                        .buttonStyle(.plain)
-                        Divider().background(FlowTheme.Colors.outlineVariant)
-                            .padding(.leading, FlowTheme.Spacing.md + 24)
-                    }
-                }
+            suggestionList(suggestions, icon: "magnifyingglass")
+        } else if PlayerPreferences.shared.searchHistoryEnabled, !searchHistory.isEmpty {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+                Text("Recent searches")
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                    .padding(.horizontal, FlowTheme.Spacing.md)
+                suggestionList(searchHistory, icon: "clock")
             }
         } else {
             VStack(spacing: FlowTheme.Spacing.md) {
@@ -115,6 +99,36 @@ struct SearchView: View {
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func suggestionList(_ items: [String], icon: String) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(items, id: \.self) { suggestion in
+                    Button {
+                        query = suggestion
+                        performSearch()
+                    } label: {
+                        HStack(spacing: FlowTheme.Spacing.md) {
+                            Image(systemName: icon)
+                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                            Text(suggestion)
+                                .font(FlowTheme.Typography.bodyMedium)
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            Spacer()
+                            Image(systemName: "arrow.up.left")
+                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                                .font(.caption)
+                        }
+                        .padding(.horizontal, FlowTheme.Spacing.md)
+                        .padding(.vertical, FlowTheme.Spacing.sm + 2)
+                    }
+                    .buttonStyle(.plain)
+                    Divider().background(FlowTheme.Colors.outlineVariant)
+                        .padding(.leading, FlowTheme.Spacing.md + 24)
+                }
+            }
         }
     }
 
@@ -136,9 +150,15 @@ struct SearchView: View {
         case .video(let v):
             HorizontalVideoRow(video: v) { player.play(video: v) }
         case .channel(let c):
-            ChannelRow(channel: c)
+            NavigationLink { ChannelDetailView(channel: c) } label: {
+                ChannelRow(channel: c)
+            }
+            .buttonStyle(.plain)
         case .playlist(let p):
-            PlaylistRow(playlist: p)
+            NavigationLink { PlaylistDetailView(playlist: p) } label: {
+                PlaylistRow(playlist: p)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -156,6 +176,7 @@ struct SearchView: View {
     // MARK: - Actions
     private func performSearch() {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        saveSearchQuery(query.trimmingCharacters(in: .whitespaces))
         Task { @MainActor in
             isLoading = true
             error     = nil
@@ -170,9 +191,27 @@ struct SearchView: View {
     }
 
     private func fetchSuggestions(for q: String) {
+        guard PlayerPreferences.shared.searchSuggestionsEnabled else {
+            suggestions = []
+            return
+        }
         Task { @MainActor in
             suggestions = (try? await client.fetchSearchSuggestions(query: q)) ?? []
         }
+    }
+
+    private func reloadSearchHistory() {
+        searchHistory = UserDefaults.standard.stringArray(forKey: historyKey) ?? []
+    }
+
+    private func saveSearchQuery(_ q: String) {
+        guard PlayerPreferences.shared.searchHistoryEnabled else { return }
+        var history = searchHistory.filter { $0.caseInsensitiveCompare(q) != .orderedSame }
+        history.insert(q, at: 0)
+        let max = PlayerPreferences.shared.searchHistoryMaxSize
+        history = Array(history.prefix(max))
+        UserDefaults.standard.set(history, forKey: historyKey)
+        searchHistory = history
     }
 }
 

@@ -10,24 +10,25 @@ enum JSCipherError: Error {
 class JSCipher {
     static let shared = JSCipher()
     
-    private let context: JSContext
+    private let context: JSContext?
     
     init() {
-        guard let ctx = JSContext() else {
-            fatalError("Failed to create JSContext")
-        }
-        self.context = ctx
-        
-        // Define an exception handler
-        context.exceptionHandler = { context, exception in
-            if let exception = exception {
-                print("JS Error: \(exception.toString() ?? "Unknown")")
+        if let ctx = JSContext() {
+            self.context = ctx
+            ctx.exceptionHandler = { _, exception in
+                if let exception = exception {
+                    print("JS Error: \(exception.toString() ?? "Unknown")")
+                }
             }
+        } else {
+            self.context = nil
+            print("[JSCipher] Failed to create JSContext")
         }
     }
     
     /// Deciphers a signature given the raw YouTube base.js source and the encrypted signature.
     func decipher(signature: String, jsSource: String) throws -> String {
+        guard let context else { throw JSCipherError.jsContextCreationFailed }
         context.evaluateScript(jsSource)
         if context.exception != nil {
             throw JSCipherError.scriptEvaluationFailed

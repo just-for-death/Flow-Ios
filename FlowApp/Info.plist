@@ -62,6 +62,8 @@
     </dict>
 
     <!-- Privacy descriptions -->
+    <key>NSCameraUsageDescription</key>
+    <string>Flow uses the camera to scan QR codes for device-to-device sync.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Flow uses the microphone for song recognition (Shazam-style).</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
@@ -81,5 +83,149 @@
     <!-- Launch screen (blank — SwiftUI handles it) -->
     <key>UILaunchScreen</key>
     <dict/>
+
+    <!-- Alternate app icons -->
+    <key>CFBundleIcons</key>
+    <dict>
+        <key>CFBundlePrimaryIcon</key>
+        <dict>
+            <key>CFBundleIconFiles</key>
+            <array>
+                <string>AppIcon</string>
+            </array>
+            <key>UIPrebuiltIcons</key>
+            <false/>
+        </dict>
+        <key>CFBundleAlternateIcons</key>
+        <dict>
+            <key>FlowRed</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowRed</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>FlowLight</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowLight</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>FlowPlay</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowPlay</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Amoled</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Amoled</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Monochrome</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Monochrome</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Ghost</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Ghost</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>MaterialSky</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>MaterialSky</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>MaterialMint</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>MaterialMint</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+        </dict>
+    </dict>
+    <key>CFBundleIcons~ipad</key>
+    <dict>
+        <key>CFBundlePrimaryIcon</key>
+        <dict>
+            <key>CFBundleIconFiles</key>
+            <array>
+                <string>AppIcon</string>
+            </array>
+            <key>UIPrebuiltIcons</key>
+            <false/>
+        </dict>
+        <key>CFBundleAlternateIcons</key>
+        <dict>
+            <key>FlowRed</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowRed</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>FlowLight</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowLight</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>FlowPlay</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>FlowPlay</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Amoled</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Amoled</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Monochrome</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Monochrome</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>Ghost</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>Ghost</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>MaterialSky</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>MaterialSky</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+            <key>MaterialMint</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array><string>MaterialMint</string></array>
+                <key>UIPrebuiltIcons</key>
+                <false/>
+            </dict>
+        </dict>
+    </dict>
 </dict>
 </plist>

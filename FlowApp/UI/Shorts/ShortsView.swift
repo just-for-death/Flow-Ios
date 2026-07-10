@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - ShortsView
 struct ShortsView: View {
+    @Environment(AppRouter.self) private var router
     @State private var shorts: [ShortVideo] = []
     @State private var currentIndex = 0
     @State private var isLoading = true
@@ -39,6 +40,11 @@ struct ShortsView: View {
             }
         }
         .task { await loadInitial() }
+        .onChange(of: router.requestedShortID) { _, id in
+            guard let id else { return }
+            router.requestedShortID = nil
+            Task { await focusShort(id) }
+        }
         .onAppear {
             FlowAVPlayer.shared.pause()
             pool.initializeIfNeeded()
@@ -88,13 +94,27 @@ struct ShortsView: View {
             shorts = page.shorts
             continuation = page.continuation
             if let ranked = rankShorts(page.shorts) { shorts = ranked }
-            if !shorts.isEmpty {
-                await onPageChanged(0)
+            if let savedID = router.requestedShortID {
+                router.requestedShortID = nil
+                await focusShort(savedID)
+            } else if !shorts.isEmpty {
+                await onPageChanged(currentIndex)
             }
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    @MainActor
+    private func focusShort(_ savedID: String) async {
+        if !shorts.contains(where: { $0.id == savedID }) {
+            shorts.insert(.placeholder(id: savedID), at: 0)
+        }
+        currentIndex = shorts.firstIndex(where: { $0.id == savedID }) ?? 0
+        if !shorts.isEmpty {
+            await onPageChanged(currentIndex)
+        }
     }
 
     private func loadMore() async {
@@ -122,23 +142,29 @@ struct ShortPageView: View {
     let isActive: Bool
     @State private var pool = ShortsPlayerPool.shared
 
+    private var uiMode: String { PlayerPreferences.shared.shortsPlayerUiMode.uppercased() }
+    private var isSimple: Bool { uiMode == "SIMPLE" }
+    private var isImpressive: Bool { uiMode == "IMPRESSIVE" }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottomLeading) {
                 ShortsPlayerSurface(pageIndex: pageIndex, isActive: isActive)
                     .frame(width: geo.size.width, height: geo.size.height)
 
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.75)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
+                if !isSimple {
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(isImpressive ? 0.9 : 0.75)],
+                        startPoint: .center,
+                        endPoint: .bottom
+                    )
+                    .allowsHitTesting(false)
+                }
 
                 VStack {
                     HStack {
                         Spacer()
-                        if PlayerPreferences.shared.shortsPlaybackMode == "auto_interval" {
+                        if PlayerPreferences.shared.shortsPlaybackMode == "auto_interval" && !isSimple {
                             Text("Auto \(PlayerPreferences.shared.shortsAutoScrollSeconds)s")
                                 .font(FlowTheme.Typography.labelSmall)
                                 .foregroundStyle(.white)
@@ -149,6 +175,19 @@ struct ShortPageView: View {
                                 .padding(.top, geo.safeAreaInsets.top + 60)
                         }
                         VStack(spacing: FlowTheme.Spacing.md) {
+                            if !isSimple {
+                                Button {
+                                    SavedShortsStore.shared.toggle(short)
+                                } label: {
+                                    Image(systemName: SavedShortsStore.shared.isSaved(short.id) ? "bookmark.fill" : "bookmark")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 44, height: 44)
+                                        .background(.black.opacity(0.35))
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                            }
                             Button { pool.toggleMute() } label: {
                                 Image(systemName: pool.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                                     .font(.system(size: 22))
@@ -167,19 +206,21 @@ struct ShortPageView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(short.title)
-                        .font(FlowTheme.Typography.titleSmall)
+                        .font(isImpressive ? FlowTheme.Typography.titleMedium : FlowTheme.Typography.titleSmall)
                         .foregroundStyle(.white)
-                        .lineLimit(2)
-                    Text(short.channelName)
-                        .font(FlowTheme.Typography.bodyMedium)
-                        .foregroundStyle(.white.opacity(0.85))
-                    if let views = short.viewCountText {
-                        Text(views)
-                            .font(FlowTheme.Typography.bodySmall)
-                            .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(isSimple ? 1 : 2)
+                    if !isSimple {
+                        Text(short.channelName)
+                            .font(FlowTheme.Typography.bodyMedium)
+                            .foregroundStyle(.white.opacity(0.85))
+                        if let views = short.viewCountText {
+                            Text(views)
+                                .font(FlowTheme.Typography.bodySmall)
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
                     }
                 }
-                .padding(FlowTheme.Spacing.lg)
+                .padding(isImpressive ? FlowTheme.Spacing.xl : FlowTheme.Spacing.lg)
                 .padding(.bottom, geo.safeAreaInsets.bottom + 90)
             }
         }
