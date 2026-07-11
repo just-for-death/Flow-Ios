@@ -110,15 +110,15 @@ final class JSCipher {
             }
         }
 
-        // .get("n")&&(b=NAME[IDX](c)
-        if let match = firstMatch(#"\.get\("n"\)\)&&\(b=([a-zA-Z0-9$]+)(?:\[(\d+)\])?\(([a-zA-Z0-9])\)"#, in: js),
+        // Android: .get("n"))&&(b=NAME[IDX](c)  — note optional extra ')'
+        if let match = firstMatch(#"\.get\("n"\)\)?\s*&&\s*\(b=([a-zA-Z0-9$]+)(?:\[(\d+)\])?\(([a-zA-Z0-9$])\)"#, in: js),
            let name = group(1, in: match, js: js) {
             let idx = group(2, in: match, js: js).flatMap(Int.init)
             return NFunctionInfo(name: name, arrayIndex: idx, acceptsURL: false)
         }
 
-        // .get("n")&&(a=NAME[IDX](a)
-        if let match = firstMatch(#"\.get\("n"\)\)\s*&&\s*\(([a-zA-Z0-9$]+)\s*=\s*([a-zA-Z0-9$]+)(?:\[(\d+)\])?\(\1\)"#, in: js),
+        // .get("n"))&&(a=NAME[IDX](a)
+        if let match = firstMatch(#"\.get\("n"\)\)?\s*&&\s*\(([a-zA-Z0-9$]+)\s*=\s*([a-zA-Z0-9$]+)(?:\[(\d+)\])?\(\1\)"#, in: js),
            let name = group(2, in: match, js: js) {
             let idx = group(3, in: match, js: js).flatMap(Int.init)
             return NFunctionInfo(name: name, arrayIndex: idx, acceptsURL: false)

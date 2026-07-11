@@ -4,7 +4,7 @@ import XCTest
 final class JSCipherNsigTests: XCTestCase {
 
     func testExtractNFunctionFromGetNPattern() {
-        let js = #".get("n")&&(b=xyz(c));"#
+        let js = #".get("n"))&&(b=xyz(c));"#
         let info = JSCipher.shared.extractNFunctionInfo(from: js)
         XCTAssertEqual(info?.name, "xyz")
         XCTAssertNil(info?.arrayIndex)
@@ -12,7 +12,7 @@ final class JSCipherNsigTests: XCTestCase {
     }
 
     func testExtractNFunctionWithArrayIndex() {
-        let js = #".get("n")&&(b=abc[2](c));"#
+        let js = #".get("n"))&&(b=abc[2](c));"#
         let info = JSCipher.shared.extractNFunctionInfo(from: js)
         XCTAssertEqual(info?.name, "abc")
         XCTAssertEqual(info?.arrayIndex, 2)
@@ -21,7 +21,7 @@ final class JSCipherNsigTests: XCTestCase {
     func testTransformNWithSyntheticFunction() throws {
         let js = """
         var ntr = function(a) { return a.split("").reverse().join("") + "x"; };
-        .get("n")&&(b=ntr(c));
+        .get("n"))&&(b=ntr(c));
         """
         let out = try JSCipher.shared.transformN("abcde", jsSource: js)
         XCTAssertEqual(out, "edcbax")
