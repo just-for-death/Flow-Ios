@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import SwiftUI
 import UIKit
 
 // MARK: - ShortsPlayerPool
@@ -83,7 +84,9 @@ final class ShortsPlayerPool {
                     object: item,
                     queue: .main
                 ) { [weak self] _ in
-                    self?.onShouldAdvance?()
+                    Task { @MainActor in
+                        self?.onShouldAdvance?()
+                    }
                 }
                 endObservers[ObjectIdentifier(item)] = token
             }
