@@ -1,20 +1,30 @@
 import Foundation
 import UIKit
 
+// Top-level so it can be passed as a C function pointer (no captures).
+private func flowUncaughtExceptionHandler(_ exception: NSException) {
+    let report = """
+    [\(ISO8601DateFormatter().string(from: Date()))] UNCAUGHT EXCEPTION
+    \(exception.name.rawValue): \(exception.reason ?? "unknown")
+    \(exception.callStackSymbols.joined(separator: "\n"))
+    ---
+    """
+    let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("flow_crash_log.txt")
+    if FileManager.default.fileExists(atPath: url.path),
+       let existing = try? String(contentsOf: url, encoding: .utf8) {
+        try? (existing + "\n" + report).write(to: url, atomically: true, encoding: .utf8)
+    } else {
+        try? report.write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
 // MARK: - FlowCrashHandler
 enum FlowCrashHandler {
     private static let crashFileName = "flow_crash_log.txt"
 
     static func install() {
-        NSSetUncaughtExceptionHandler { exception in
-            let report = """
-            [\(ISO8601DateFormatter().string(from: Date()))] UNCAUGHT EXCEPTION
-            \(exception.name.rawValue): \(exception.reason ?? "unknown")
-            \(exception.callStackSymbols.joined(separator: "\n"))
-            ---
-            """
-            appendCrashLog(report)
-        }
+        NSSetUncaughtExceptionHandler(flowUncaughtExceptionHandler)
     }
 
     static func crashLogURL() -> URL {
