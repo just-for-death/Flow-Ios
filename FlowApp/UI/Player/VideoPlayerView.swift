@@ -242,6 +242,20 @@ struct VideoPlayerView: View {
                 ProgressView().tint(.white).scaleEffect(1.5)
             }
 
+            if let toast = player.sponsorToastMessage {
+                VStack {
+                    Text("SponsorBlock: \(toast)")
+                        .font(FlowTheme.Typography.labelMedium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, FlowTheme.Spacing.md)
+                        .padding(.vertical, FlowTheme.Spacing.sm)
+                        .background(.black.opacity(0.7))
+                        .clipShape(Capsule())
+                        .padding(.top, FlowTheme.Spacing.lg)
+                    Spacer()
+                }
+            }
+
             // Error
             if let error = player.error {
                 VStack(spacing: FlowTheme.Spacing.sm) {

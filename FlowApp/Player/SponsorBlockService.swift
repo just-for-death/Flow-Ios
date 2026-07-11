@@ -12,7 +12,7 @@ final class SponsorBlockService {
 
     // Categories to request (matches Android default set)
     private let defaultCategories: [SponsorCategory] = [
-        .sponsor, .selfpromo, .interaction, .intro, .outro, .preview, .filler, .music_offtopic
+        .sponsor, .selfpromo, .interaction, .intro, .outro, .preview, .filler, .music_offtopic, .exclusive_access
     ]
 
     // MARK: - Enabled categories (user-configurable via Settings)
@@ -37,15 +37,24 @@ final class SponsorBlockService {
     enum CategoryAction: String, CaseIterable, Codable {
         case skip = "SKIP"
         case mute = "MUTE"
-        case manual = "MANUAL"
-        case show = "SHOW"
+        case showToast = "SHOW_TOAST"
+        case ignore = "IGNORE"
 
         var displayName: String {
             switch self {
             case .skip: return "Skip"
             case .mute: return "Mute"
-            case .manual: return "Manual"
-            case .show: return "Show"
+            case .showToast: return "Show toast"
+            case .ignore: return "Ignore"
+            }
+        }
+
+        /// Maps Android canonical values and legacy iOS storage.
+        static func fromStored(_ raw: String) -> CategoryAction {
+            switch raw {
+            case "MANUAL": return .showToast
+            case "SHOW": return .ignore
+            default: return CategoryAction(rawValue: raw) ?? .skip
             }
         }
     }
@@ -53,7 +62,7 @@ final class SponsorBlockService {
     func action(for category: SponsorCategory) -> CategoryAction {
         let key = "sb_action_\(category.rawValue)"
         let raw = UserDefaults.standard.string(forKey: key) ?? CategoryAction.skip.rawValue
-        return CategoryAction(rawValue: raw) ?? .skip
+        return CategoryAction.fromStored(raw)
     }
 
     func setAction(_ action: CategoryAction, for category: SponsorCategory) {
@@ -88,7 +97,7 @@ final class SponsorBlockService {
                   let cat = SponsorCategory(rawValue: seg.category),
                   enabledCategories.contains(cat) else { return nil }
             let action = action(for: cat)
-            guard action != .show else { return nil }
+            guard action != .ignore else { return nil }
             let start = seg.segment[0] / totalDuration
             let end   = seg.segment[1] / totalDuration
             return SponsorSegment(id: seg.UUID, start: start, end: end, category: cat, action: action)

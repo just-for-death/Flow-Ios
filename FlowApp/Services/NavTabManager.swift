@@ -10,7 +10,7 @@ enum NavTab: Int, CaseIterable, Identifiable, Hashable {
     case subscriptions = 3
     case library = 4
     case search = 5
-    case settings = 6
+    case explore = 6
 
     var id: Int { rawValue }
 
@@ -22,7 +22,7 @@ enum NavTab: Int, CaseIterable, Identifiable, Hashable {
         case .subscriptions: return "person.2.fill"
         case .library: return "folder.fill"
         case .search: return "magnifyingglass"
-        case .settings: return "gearshape.fill"
+        case .explore: return "square.grid.2x2.fill"
         }
     }
 
@@ -34,14 +34,14 @@ enum NavTab: Int, CaseIterable, Identifiable, Hashable {
         case .subscriptions: return "Subscriptions"
         case .library: return "Library"
         case .search: return "Search"
-        case .settings: return "Settings"
+        case .explore: return "Explore"
         }
     }
 
-    /// Tabs that can be hidden via settings (Settings is always available).
+    /// Tabs that can be hidden via settings.
     var isOptional: Bool {
         switch self {
-        case .shorts, .music, .search: return true
+        case .shorts, .music, .search, .explore: return true
         default: return false
         }
     }
@@ -116,6 +116,15 @@ final class NavTabManager {
         }
     }
 
+    var categoriesNavigationEnabled: Bool {
+        get { defaults.object(forKey: "categories_nav_tab_enabled") as? Bool ?? false }
+        set {
+            defaults.set(newValue, forKey: "categories_nav_tab_enabled")
+            reconcileDefaultTab()
+            touch()
+        }
+    }
+
     private func reconcileDefaultTab() {
         if let tab = NavTab(rawValue: defaultTabIndex), !isEnabled(tab) {
             defaultTabIndex = (enabledTabs().first ?? .home).rawValue
@@ -127,7 +136,7 @@ final class NavTabManager {
         case .shorts: return shortsNavigationEnabled
         case .music: return musicNavigationEnabled
         case .search: return searchNavTabEnabled
-        case .settings: return true
+        case .explore: return categoriesNavigationEnabled
         default: return true
         }
     }

@@ -296,7 +296,16 @@ struct ContentSettingsView: View {
             Toggle("Show related videos", isOn: Binding(get: { prefs.showRelatedVideos }, set: { prefs.showRelatedVideos = $0 }))
             Toggle("Subtitles enabled", isOn: Binding(get: { prefs.subtitlesEnabled }, set: { prefs.subtitlesEnabled = $0 }))
             Toggle("Comments enabled", isOn: Binding(get: { prefs.commentsEnabled }, set: { prefs.commentsEnabled = $0 }))
+            Toggle("Comments preview", isOn: Binding(get: { prefs.commentsPreviewEnabled }, set: { prefs.commentsPreviewEnabled = $0 }))
+            Toggle("DeArrow badge", isOn: Binding(get: { prefs.dearrowBadgeEnabled }, set: { prefs.dearrowBadgeEnabled = $0 }))
             Toggle("Hide bottom nav on scroll", isOn: Binding(get: { prefs.bottomNavHideOnScroll }, set: { prefs.bottomNavHideOnScroll = $0 }))
+            Toggle("Region picker in Explore", isOn: Binding(get: { prefs.showRegionPickerInExplore }, set: { prefs.showRegionPickerInExplore = $0 }))
+
+            Section("Subscriptions feed") {
+                Toggle("Show videos", isOn: Binding(get: { prefs.subscriptionShowVideos }, set: { prefs.subscriptionShowVideos = $0 }))
+                Toggle("Show shorts", isOn: Binding(get: { prefs.subscriptionShowShorts }, set: { prefs.subscriptionShowShorts = $0 }))
+                Toggle("Show live", isOn: Binding(get: { prefs.subscriptionShowLive }, set: { prefs.subscriptionShowLive = $0 }))
+            }
 
             Section("Navigation") {
                 NavigationLink("Customize tabs") { NavigationSettingsView() }
@@ -318,6 +327,7 @@ struct NavigationSettingsView: View {
                 Toggle("Shorts tab", isOn: Binding(get: { nav.shortsNavigationEnabled }, set: { nav.shortsNavigationEnabled = $0 }))
                 Toggle("Music tab", isOn: Binding(get: { nav.musicNavigationEnabled }, set: { nav.musicNavigationEnabled = $0 }))
                 Toggle("Search tab", isOn: Binding(get: { nav.searchNavTabEnabled }, set: { nav.searchNavTabEnabled = $0 }))
+                Toggle("Explore tab", isOn: Binding(get: { nav.categoriesNavigationEnabled }, set: { nav.categoriesNavigationEnabled = $0 }))
             }
 
             Section("Tab order") {
@@ -447,6 +457,8 @@ struct PlayerAppearanceSettingsView: View {
             Toggle("Auto PiP", isOn: Binding(get: { prefs.autoPipEnabled }, set: { prefs.autoPipEnabled = $0 }))
             Toggle("Background play", isOn: Binding(get: { prefs.backgroundPlayEnabled }, set: { prefs.backgroundPlayEnabled = $0 }))
             Toggle("Loop videos", isOn: Binding(get: { prefs.videoLoopEnabled }, set: { prefs.videoLoopEnabled = $0 }))
+            Toggle("Skip silence", isOn: Binding(get: { prefs.skipSilenceEnabled }, set: { prefs.skipSilenceEnabled = $0 }))
+            Toggle("Stable volume", isOn: Binding(get: { prefs.stableVolumeEnabled }, set: { prefs.stableVolumeEnabled = $0 }))
         }
         .scrollContentBackground(.hidden).background(FlowTheme.Colors.background)
         .navigationTitle("Player Appearance")

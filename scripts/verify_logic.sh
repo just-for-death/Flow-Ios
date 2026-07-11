@@ -161,6 +161,20 @@ print(result.prefix(3).map(String.init).joined(separator: ","))
 ')
 assert_eq "nav move skips disabled" "2,1,0" "$RESULT"
 
+# SponsorBlock action legacy mapping
+RESULT=$(swift -e '
+enum A: String { case skip = "SKIP"; case showToast = "SHOW_TOAST"; case ignore = "IGNORE" }
+func map(_ raw: String) -> String {
+    switch raw {
+    case "MANUAL": return A.showToast.rawValue
+    case "SHOW": return A.ignore.rawValue
+    default: return A(rawValue: raw)?.rawValue ?? A.skip.rawValue
+    }
+}
+print("\(map("MANUAL"))|\(map("SHOW"))")
+')
+assert_eq "sponsor action legacy map" "SHOW_TOAST|IGNORE" "$RESULT"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -gt 0 ]]; then exit 1; fi

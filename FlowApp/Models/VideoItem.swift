@@ -13,6 +13,13 @@ struct VideoItem: Identifiable, Hashable, Codable {
     let isLive: Bool
 
     var watchURL: URL { URL(string: "https://www.youtube.com/watch?v=\(id)")! }
+
+    /// Heuristic short-form detection for subscription feed filtering.
+    var isShortVideo: Bool {
+        if title.range(of: "#shorts", options: .caseInsensitive) != nil { return true }
+        if let d = duration, d > 0, d <= 60 { return true }
+        return false
+    }
 }
 
 // MARK: - Music item
@@ -119,6 +126,7 @@ struct SponsorSegment: Identifiable, Codable {
     var action: SponsorBlockService.CategoryAction = .skip
     var skipAutomatically: Bool { action == .skip }
     var shouldMute: Bool { action == .mute }
+    var shouldShowToast: Bool { action == .showToast }
 }
 
 enum SponsorCategory: String, Codable, CaseIterable {
@@ -130,6 +138,7 @@ enum SponsorCategory: String, Codable, CaseIterable {
     case preview
     case filler
     case music_offtopic
+    case exclusive_access = "exclusive_access"
 
     var displayName: String {
         switch self {
@@ -141,6 +150,7 @@ enum SponsorCategory: String, Codable, CaseIterable {
         case .preview:         return "Preview/Recap"
         case .filler:          return "Filler"
         case .music_offtopic:  return "Music off-topic"
+        case .exclusive_access: return "Exclusive access"
         }
     }
 

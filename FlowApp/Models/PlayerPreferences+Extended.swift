@@ -16,6 +16,9 @@ extension PlayerPreferences {
     // Playback
     var autoplayEnabled: Bool { get { bool("autoplay_enabled", default: true) } set { set(newValue, "autoplay_enabled") } }
     var queueAutoplayEnabled: Bool { get { bool("queue_autoplay_enabled", default: true) } set { set(newValue, "queue_autoplay_enabled") } }
+    var playbackSpeed: Float { get { float("playback_speed", default: 1.0) } set { set(newValue, "playback_speed") } }
+    var skipSilenceEnabled: Bool { get { bool("skip_silence_enabled", default: false) } set { set(newValue, "skip_silence_enabled") } }
+    var stableVolumeEnabled: Bool { get { bool("stable_volume_enabled", default: false) } set { set(newValue, "stable_volume_enabled") } }
     var backgroundPlayEnabled: Bool { get { bool("background_play_enabled", default: true) } set { set(newValue, "background_play_enabled") } }
     var resumePlaybackEnabled: Bool { get { bool("resumePlayback", default: true) } set { set(newValue, "resumePlayback") } }
     var videoLoopEnabled: Bool { get { bool("video_loop_enabled", default: false) } set { set(newValue, "video_loop_enabled") } }
@@ -34,6 +37,9 @@ extension PlayerPreferences {
     var hideWatchedVideos: Bool { get { bool("hide_watched_videos", default: false) } set { set(newValue, "hide_watched_videos") } }
     var watchedThreshold: Float { get { float("watched_threshold", default: 0.9) } set { set(newValue, "watched_threshold") } }
     var commentsEnabled: Bool { get { bool("comments_enabled", default: true) } set { set(newValue, "comments_enabled") } }
+    var commentsPreviewEnabled: Bool { get { bool("comments_preview_enabled", default: true) } set { set(newValue, "comments_preview_enabled") } }
+    var dearrowBadgeEnabled: Bool { get { bool("dearrow_badge_enabled", default: true) } set { set(newValue, "dearrow_badge_enabled") } }
+    var showShortsPlayerPrompt: Bool { get { bool("show_shorts_player_prompt", default: true) } set { set(newValue, "show_shorts_player_prompt") } }
     var bottomNavHideOnScroll: Bool { get { bool("bottom_nav_hide_on_scroll", default: false) } set { set(newValue, "bottom_nav_hide_on_scroll") } }
     var shortsPlayerUiMode: String { get { string("shorts_player_ui_mode", default: "DEFAULT") } set { set(newValue, "shorts_player_ui_mode") } }
     var showRelatedVideos: Bool { get { bool("show_related_videos", default: true) } set { set(newValue, "show_related_videos") } }
@@ -78,6 +84,16 @@ extension PlayerPreferences {
     // App
     var appLanguage: String { get { string("app_language", default: "system") } set { set(newValue, "app_language") } }
     var trendingRegion: String { get { string("trending_region", default: "US") } set { set(newValue, "trending_region") } }
+    var showRegionPickerInExplore: Bool { get { bool("show_region_picker_in_explore", default: true) } set { set(newValue, "show_region_picker_in_explore") } }
+    var categoriesIsListView: Bool { get { bool("categories_is_list_view", default: false) } set { set(newValue, "categories_is_list_view") } }
+    var subscriptionShowVideos: Bool { get { bool("subscription_show_videos", default: true) } set { set(newValue, "subscription_show_videos") } }
+    var subscriptionShowShorts: Bool { get { bool("subscription_show_shorts", default: true) } set { set(newValue, "subscription_show_shorts") } }
+    var subscriptionShowLive: Bool { get { bool("subscription_show_live", default: true) } set { set(newValue, "subscription_show_live") } }
+    var defaultVideoCodec: String { get { string("default_video_codec", default: "auto") } set { set(newValue, "default_video_codec") } }
+    var musicAudioQuality: String { get { string("music_audio_quality", default: "high") } set { set(newValue, "music_audio_quality") } }
+    var preferredAudioLanguage: String { get { string("preferred_audio_language", default: "default") } set { set(newValue, "preferred_audio_language") } }
+    var preferredSubtitleLanguage: String { get { string("preferred_subtitle_language", default: "default") } set { set(newValue, "preferred_subtitle_language") } }
+    var sbSubmitEnabled: Bool { get { bool("sb_submit_enabled", default: false) } set { set(newValue, "sb_submit_enabled") } }
 
     /// Wi‑Fi vs cellular quality for long-form playback.
     var effectivePlaybackQuality: String {

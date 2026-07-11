@@ -38,6 +38,14 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         vm.refresh(neuro: neuro)

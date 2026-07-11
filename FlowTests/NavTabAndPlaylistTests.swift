@@ -7,6 +7,10 @@ final class NavTabManagerTests: XCTestCase {
         XCTAssertEqual(NavTabManager.defaultOrder.count, 7)
     }
 
+    func testExploreTabIndexMatchesAndroid() {
+        XCTAssertEqual(NavTab.explore.rawValue, 6)
+    }
+
     func testMoveTabReorders() {
         let nav = NavTabManager.shared
         let original = nav.tabOrder
@@ -40,14 +44,17 @@ final class NavTabManagerTests: XCTestCase {
         let savedShorts = nav.shortsNavigationEnabled
         let savedMusic = nav.musicNavigationEnabled
         let savedSearch = nav.searchNavTabEnabled
+        let savedExplore = nav.categoriesNavigationEnabled
         defer {
             nav.shortsNavigationEnabled = savedShorts
             nav.musicNavigationEnabled = savedMusic
             nav.searchNavTabEnabled = savedSearch
+            nav.categoriesNavigationEnabled = savedExplore
         }
         nav.shortsNavigationEnabled = true
         nav.musicNavigationEnabled = true
         nav.searchNavTabEnabled = true
+        nav.categoriesNavigationEnabled = true
         XCTAssertGreaterThan(nav.enabledTabs().count, NavTabManager.maxVisibleTabs)
         XCTAssertFalse(nav.overflowTabs().isEmpty)
     }
@@ -90,5 +97,10 @@ final class FlowAppIconTests: XCTestCase {
         let autoplay = SyncSettingsMapper.whitelist.first { $0.canonical == "autoplay" }
         XCTAssertEqual(autoplay?.iosKey, "autoplay_enabled")
         XCTAssertNotEqual(entry?.iosKey, autoplay?.iosKey)
+    }
+
+    func testSyncWhitelistIncludesSponsorActions() {
+        XCTAssertNotNil(SyncSettingsMapper.whitelist.first { $0.canonical == "sponsorblock_action_sponsor" })
+        XCTAssertNotNil(SyncSettingsMapper.whitelist.first { $0.canonical == "subscriptions_show_shorts" })
     }
 }

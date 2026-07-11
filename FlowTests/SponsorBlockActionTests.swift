@@ -11,6 +11,18 @@ final class SponsorBlockActionTests: XCTestCase {
         XCTAssertEqual(service.action(for: .sponsor), .skip)
     }
 
+    func testCategoryActionLegacyMapping() {
+        XCTAssertEqual(SponsorBlockService.CategoryAction.fromStored("MANUAL"), .showToast)
+        XCTAssertEqual(SponsorBlockService.CategoryAction.fromStored("SHOW"), .ignore)
+        XCTAssertEqual(SponsorBlockService.CategoryAction.fromStored("SHOW_TOAST"), .showToast)
+    }
+
+    func testSegmentToastFlag() {
+        let seg = SponsorSegment(id: "1", start: 0.1, end: 0.2, category: .sponsor, action: .showToast)
+        XCTAssertTrue(seg.shouldShowToast)
+        XCTAssertFalse(seg.skipAutomatically)
+    }
+
     func testSegmentMuteFlag() {
         let seg = SponsorSegment(id: "1", start: 0.1, end: 0.2, category: .sponsor, action: .mute)
         XCTAssertTrue(seg.shouldMute)

@@ -111,7 +111,41 @@ final class SubscriptionStore {
         }
 
         all.sort { $0.date > $1.date }
-        feedVideos = Array(all.prefix(500).map(\.video))
+        feedVideos = applyFeedFilters(all)
+    }
+
+    private func applyFeedFilters(_ items: [(video: VideoItem, date: Date)]) -> [VideoItem] {
+        let prefs = PlayerPreferences.shared
+        var filtered: [(VideoItem, Date)] = items
+
+        filtered = filtered.filter { item in
+            let isShort = item.video.isShortVideo
+            let isLive = item.video.isLive
+            let isRegular = !isShort && !isLive
+            if isRegular && !prefs.subscriptionShowVideos { return false }
+            if isShort && !prefs.subscriptionShowShorts { return false }
+            if isLive && !prefs.subscriptionShowLive { return false }
+            return true
+        }
+
+        if prefs.hideWatchedVideos {
+            let watched = NeuroEngine.shared.brain.watchHistoryMap
+            let threshold = prefs.watchedThreshold
+            filtered = filtered.filter { item in
+                guard let progress = watched[item.video.id] else { return true }
+                return progress < threshold
+            }
+        }
+
+        var seenShortChannels = Set<String>()
+        filtered = filtered.filter { item in
+            guard item.video.isShortVideo else { return true }
+            if seenShortChannels.contains(item.video.channelID) { return false }
+            seenShortChannels.insert(item.video.channelID)
+            return true
+        }
+
+        return Array(filtered.prefix(500).map(\.video))
     }
 
     private static func fetchRSS(channelID: String, channelName: String) async -> [(VideoItem, Date)] {
@@ -127,11 +161,12 @@ final class SubscriptionStore {
             guard let videoId = extractTag("yt:videoId", from: entry) ?? extractAttr("yt:videoId", from: entry) else { continue }
             let title = extractTag("title", from: entry) ?? "Video"
             let published = extractTag("published", from: entry).flatMap { formatter.date(from: $0) } ?? Date()
+            let isLive = title.localizedCaseInsensitiveContains("live")
 
             let video = VideoItem(
                 id: videoId, title: title, channelName: channelName, channelID: channelID,
                 thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"),
-                duration: nil, viewCount: nil, publishedAt: nil, isLive: false
+                duration: nil, viewCount: nil, publishedAt: nil, isLive: isLive
             )
             results.append((video, published))
         }

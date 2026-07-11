@@ -24,6 +24,7 @@ final class FlowAVPlayer: NSObject {
     var bufferProgress: Double = 0   // 0…1
     var error: Error?
     var sponsorSegments: [SponsorSegment] = []
+    var sponsorToastMessage: String?
     var isInPiP: Bool         = false
     /// Called when playback ends (unless looping). Set by VideoPlayerView for autoplay.
     var onVideoFinished: (() -> Void)?
@@ -35,6 +36,7 @@ final class FlowAVPlayer: NSObject {
     private var lastWatchHistoryUpdate: TimeInterval = 0
     private var sponsorMuted = false
     private var normalVolume: Float = 1.0
+    private var lastSponsorToastID: String?
     private var resumeAppliedForVideoID: String?
     private let innerTube = InnerTubeClient.shared
     private let sponsorBlock = SponsorBlockService.shared
@@ -42,6 +44,7 @@ final class FlowAVPlayer: NSObject {
 
     private override init() {
         super.init()
+        playbackRate = PlayerPreferences.shared.playbackSpeed
         setupTimeObserver()
         setupRemoteCommandCenter()
         SleepTimerManager.shared.attach { [weak self] in self?.pause() }
@@ -246,6 +249,7 @@ final class FlowAVPlayer: NSObject {
 
     func setRate(_ rate: Float) {
         playbackRate = rate
+        PlayerPreferences.shared.playbackSpeed = rate
         if isPlaying { player.rate = rate }
     }
 
@@ -308,6 +312,14 @@ final class FlowAVPlayer: NSObject {
                 }
                 return
             }
+            if seg.shouldShowToast, lastSponsorToastID != seg.id {
+                lastSponsorToastID = seg.id
+                sponsorToastMessage = seg.category.displayName
+            }
+            return
+        }
+        if sponsorToastMessage != nil, !inMuteSegment {
+            sponsorToastMessage = nil
         }
         if sponsorMuted && !inMuteSegment {
             player.volume = normalVolume

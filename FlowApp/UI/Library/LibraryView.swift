@@ -43,6 +43,16 @@ struct LibraryView: View {
             .background(FlowTheme.Colors.background)
             .navigationTitle("Library")
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                }
+            }
         }
     }
 }

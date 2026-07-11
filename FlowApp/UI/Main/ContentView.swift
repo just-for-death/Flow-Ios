@@ -104,7 +104,7 @@ struct ContentView: View {
         case .search:        SearchView()
         case .music:         MusicHomeView()
         case .library:       LibraryView()
-        case .settings:      SettingsView()
+        case .explore:       CategoriesView()
         }
     }
 }

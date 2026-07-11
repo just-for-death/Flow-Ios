@@ -38,7 +38,6 @@ struct SettingsView: View {
                     }
                     .onChange(of: prefQuality) { _, v in PlayerPreferences.shared.preferredQuality = v }
                     Toggle("Autoplay Related Videos", isOn: $autoplay)
-                        .onChange(of: autoplay) { _, v in UserDefaults.standard.set(v, forKey: "autoplay") }
                     Toggle("Autoplay Queued Videos", isOn: $queueAutoplay)
                     Toggle("Resume Where You Left Off", isOn: $resumePlayback)
                 }
