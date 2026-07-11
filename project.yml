@@ -24,16 +24,19 @@ targets:
       - path: FlowApp
         excludes:
           - "**/*.md"
+          - Info.plist
     resources:
       - path: FlowApp/Resources
-    info:
-      path: FlowApp/Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.aedev.flow.ios
         TARGETED_DEVICE_FAMILY: "1,2"
-        GENERATE_INFOPLIST_FILE: NO
+        # Merge custom plist with generated keys (icons, DT*). GENERATE=NO was
+        # dropping FlowApp/Info.plist entirely on Codemagic unsigned builds.
+        GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: FlowApp/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Flow
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:

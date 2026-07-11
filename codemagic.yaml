@@ -159,6 +159,8 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_IDENTITY="" \
             ENTITLEMENTS_REQUIRED=NO \
+            GENERATE_INFOPLIST_FILE=YES \
+            INFOPLIST_FILE="$PWD/FlowApp/Info.plist" \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
             | xcpretty --color
       - name: Package IPA
@@ -166,11 +168,50 @@ workflows:
           set -euo pipefail
           mkdir -p build/Payload
           mv build/Release-iphoneos/Flow.app build/Payload/
-          # Fail the build if custom Info.plist keys were dropped (causes launch crashes).
+          # Codemagic/Xcode unsigned builds often emit a generated-only Info.plist.
+          # Merge FlowApp/Info.plist so BG tasks, privacy, and launch keys ship.
           python3 - <<'PY'
           import plistlib, pathlib, sys
+
           app = next(pathlib.Path("build/Payload").glob("*.app"))
-          info = plistlib.loads((app / "Info.plist").read_bytes())
+          built_path = app / "Info.plist"
+          src_path = pathlib.Path("FlowApp/Info.plist")
+          built = plistlib.loads(built_path.read_bytes())
+          src = plistlib.loads(src_path.read_bytes())
+
+          replacements = {
+              "$(DEVELOPMENT_LANGUAGE)": "en",
+              "$(EXECUTABLE_NAME)": "Flow",
+              "$(PRODUCT_BUNDLE_IDENTIFIER)": "io.github.aedev.flow.ios",
+              "$(PRODUCT_NAME)": "Flow",
+              "$(PRODUCT_BUNDLE_PACKAGE_TYPE)": "APPL",
+              "$(MARKETING_VERSION)": built.get("CFBundleShortVersionString", "1.0.0"),
+              "$(CURRENT_PROJECT_VERSION)": str(built.get("CFBundleVersion", "1")),
+          }
+
+          def expand(value):
+              if isinstance(value, str):
+                  for old, new in replacements.items():
+                      value = value.replace(old, new)
+                  return value
+              if isinstance(value, list):
+                  return [expand(v) for v in value]
+              if isinstance(value, dict):
+                  return {k: expand(v) for k, v in value.items()}
+              return value
+
+          src = expand(src)
+          for key, value in src.items():
+              # Keep asset-catalog icon dictionaries produced by the build.
+              if key in ("CFBundleIcons", "CFBundleIcons~ipad") and key in built:
+                  continue
+              built[key] = value
+
+          built["CFBundleDisplayName"] = "Flow"
+          built["CFBundleExecutable"] = "Flow"
+          built["CFBundleIdentifier"] = "io.github.aedev.flow.ios"
+          built_path.write_bytes(plistlib.dumps(built))
+
           required = [
               "BGTaskSchedulerPermittedIdentifiers",
               "UIBackgroundModes",
@@ -178,16 +219,17 @@ workflows:
               "UILaunchScreen",
               "CFBundleDisplayName",
           ]
-          missing = [k for k in required if k not in info]
+          missing = [k for k in required if k not in built]
           if missing:
               print("ERROR: Flow.app Info.plist missing keys:", missing, file=sys.stderr)
-              print("Present keys:", sorted(info), file=sys.stderr)
+              print("Present keys:", sorted(built), file=sys.stderr)
               sys.exit(1)
-          print("Info.plist OK; keys:", len(info))
+          print("Info.plist merged OK; keys:", len(built))
           PY
           cd build
-          zip -r Flow.ipa Payload
+          zip -qr Flow.ipa Payload
           cd ..
+          ls -lh build/Flow.ipa
 
     artifacts:
       - build/Flow.ipa
