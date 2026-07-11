@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - NsigDecoder
 /// Remote `n` (throttling) parameter deobfuscation via PipePipe's public decoder API.
@@ -9,12 +10,14 @@ enum NsigDecoder {
     private static let userAgent       = "Flow-iOS/1.0"
     private static let playerTTL: TimeInterval = 24 * 60 * 60
 
-    private static var playerID: String?
-    private static var playerExpiry: TimeInterval = 0
-    private static var signatureTimestamp: Int?
-    private static var nCache: [String: String] = [:]
-    private static let lock = NSLock()
+    private struct State {
+        var playerID: String?
+        var playerExpiry: TimeInterval = 0
+        var signatureTimestamp: Int?
+        var nCache: [String: String] = [:]
+    }
 
+    private static let state = OSAllocatedUnfairLock(initialState: State())
     private static let nParamRegex = try! NSRegularExpression(pattern: #"([?&])n=([^&]+)"#)
 
     static func prefetch(urls: [URL]) {
@@ -32,13 +35,13 @@ enum NsigDecoder {
                   let http = response as? HTTPURLResponse, http.statusCode == 200,
                   let decoded = parseDecodeResponse(data) else { return }
 
-            lock.lock()
-            for n in ns {
-                if let value = decoded[n], !value.isEmpty {
-                    nCache["\(pid):\(n)"] = value
+            state.withLock { s in
+                for n in ns {
+                    if let value = decoded[n], !value.isEmpty {
+                        s.nCache["\(pid):\(n)"] = value
+                    }
                 }
             }
-            lock.unlock()
         }
     }
 
@@ -64,11 +67,13 @@ enum NsigDecoder {
     // MARK: - Private
 
     private static func ensurePlayerID() -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-
         let now = Date().timeIntervalSince1970
-        if let id = playerID, now < playerExpiry { return id }
+        if let cached = state.withLock({ s -> String? in
+            if let id = s.playerID, now < s.playerExpiry { return id }
+            return nil
+        }) {
+            return cached
+        }
 
         var request = URLRequest(url: latestPlayerURL)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
@@ -78,23 +83,22 @@ enum NsigDecoder {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let id = json["player"] as? String, !id.isEmpty else { return nil }
 
-        if let sts = json["signatureTimestamp"] as? Int, sts != 0 {
-            signatureTimestamp = sts
+        return state.withLock { s in
+            if let sts = json["signatureTimestamp"] as? Int, sts != 0 {
+                s.signatureTimestamp = sts
+            }
+            s.playerID = id
+            s.playerExpiry = now + playerTTL
+            return id
         }
-        playerID = id
-        playerExpiry = now + playerTTL
-        return id
     }
 
     private static func decodeN(_ n: String) async -> String? {
         guard let pid = ensurePlayerID() else { return nil }
 
-        lock.lock()
-        if let cached = nCache["\(pid):\(n)"] {
-            lock.unlock()
+        if let cached = state.withLock({ $0.nCache["\(pid):\(n)"] }) {
             return cached
         }
-        lock.unlock()
 
         let encoded = n.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? n
         guard let url = URL(string: "\(decodeURL.absoluteString)?player=\(pid)&n=\(encoded)") else { return nil }
@@ -107,9 +111,7 @@ enum NsigDecoder {
               let decoded = parseDecodeResponse(data),
               let value = decoded[n], !value.isEmpty else { return nil }
 
-        lock.lock()
-        nCache["\(pid):\(n)"] = value
-        lock.unlock()
+        state.withLock { $0.nCache["\(pid):\(n)"] = value }
         return value
     }
 

@@ -162,7 +162,7 @@ final class PoTokenBridge: NSObject {
                   }).catch(function(error) { PoTokenBridge.onJsInitializationError(error); });
                 } catch (error) { PoTokenBridge.onJsInitializationError(error); }
                 """
-                webView.evaluateJavaScript(js, completionHandler: nil)
+                try await webView.evaluateJavaScript(js)
             } catch { finishInit(with: .failure(error)) }
         }
     }
@@ -188,7 +188,7 @@ final class PoTokenBridge: NSObject {
                   }).catch(function(error) { PoTokenBridge.onJsInitializationError(error); });
                 } catch (error) { PoTokenBridge.onJsInitializationError(error); }
                 """
-                webView.evaluateJavaScript(js, completionHandler: nil)
+                try await webView.evaluateJavaScript(js)
             } catch { finishInit(with: .failure(error)) }
         }
     }

@@ -25,6 +25,7 @@
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
@@ -86,8 +87,10 @@
 
     <!-- Launch screen (blank — SwiftUI handles it) -->
     <key>UILaunchScreen</key>
-    <dict/>
-
+    <dict>
+        <key>UILaunchScreenMinimumOSVersion</key>
+        <string>17.0</string>
+    </dict>
     <!-- Alternate app icons -->
     <key>CFBundleIcons</key>
     <dict>
