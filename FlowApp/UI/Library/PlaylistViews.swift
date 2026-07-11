@@ -71,7 +71,7 @@ struct SaveToPlaylistSheet: View {
             channelId: video.channelID,
             thumbnailUrl: video.thumbnailURL?.absoluteString ?? "",
             durationSeconds: durationSeconds,
-            hlc: UUID().uuidString
+            hlc: SyncHLC.now()
         )
         db.addToPlaylist(syncId: syncId, item: item)
         dismiss()

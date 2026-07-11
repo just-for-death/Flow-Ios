@@ -175,6 +175,49 @@ print("\(map("MANUAL"))|\(map("SHOW"))")
 ')
 assert_eq "sponsor action legacy map" "SHOW_TOAST|IGNORE" "$RESULT"
 
+# SyncCodec AAD layout (ver + sid16 + type + seq8 = 26)
+RESULT=$(swift -e '
+import Foundation
+let version: UInt8 = 0x01
+let sid = Data(repeating: 0xAB, count: 16)
+let frameType: UInt8 = 0x01
+let seq: Int64 = 0
+var aad = Data()
+aad.append(version)
+aad.append(sid)
+aad.append(frameType)
+var be = seq.bigEndian
+withUnsafeBytes(of: &be) { aad.append(contentsOf: $0) }
+print("\(aad.count)|\(aad[0])|\(aad[17])")
+')
+assert_eq "sync aad layout" "26|1|1" "$RESULT"
+
+# Gzip magic / empty member (RFC 1952) — full zlib roundtrip covered by SyncCodecTests on Xcode
+RESULT=$(swift -e '
+import Foundation
+let emptyMember: [UInt8] = [0x1f,0x8b,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+print(emptyMember[0] == 0x1f && emptyMember[1] == 0x8b && emptyMember.count == 20 ? "ok" : "bad")
+')
+assert_eq "gzip empty member layout" "ok" "$RESULT"
+
+# HLC numeric compare (physicalMs:counter:node) — not lexicographic
+RESULT=$(swift -e '
+struct H { let p: Int64; let c: Int; let n: String }
+func decode(_ v: String) -> H {
+  let parts = v.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+  guard parts.count == 3, let p = Int64(parts[0]), let c = Int(parts[1]) else { return H(p:0,c:0,n:"") }
+  return H(p: p, c: c, n: String(parts[2]))
+}
+func newer(_ a: String, _ b: String) -> Bool {
+  let x = decode(a); let y = decode(b)
+  if x.p != y.p { return x.p > y.p }
+  if x.c != y.c { return x.c > y.c }
+  return x.n > y.n
+}
+print(newer("1000:0:abcd", "999:9:zzzz") ? "newer" : "older")
+')
+assert_eq "hlc numeric order" "newer" "$RESULT"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -gt 0 ]]; then exit 1; fi

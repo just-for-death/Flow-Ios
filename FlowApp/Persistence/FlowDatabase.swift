@@ -41,7 +41,8 @@ struct CanonicalLike: Codable {
     static let KIND_VIDEO = "video"
     static let KIND_MUSIC = "music"
     static let STATE_LIKED = "liked"
-    
+    static let STATE_NONE = "none"
+
     var kind: String
     var id: String
     var state: String
@@ -88,13 +89,13 @@ final class FlowDatabase {
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    // MARK: - CRDT Merge (HLC/Timestamp Last-Write-Wins)
+    // MARK: - CRDT Merge (HLC Last-Write-Wins)
     func mergePlaylists(_ incoming: [CanonicalPlaylist]) -> (added: Int, updated: Int) {
         var added = 0
         var updated = 0
         for incomingList in incoming {
             if let existing = playlists[incomingList.syncId] {
-                if incomingList.updatedHlc > existing.updatedHlc {
+                if SyncHLC.isNewer(incomingList.updatedHlc, than: existing.updatedHlc) {
                     playlists[incomingList.syncId] = incomingList
                     updated += 1
                 }
@@ -113,7 +114,7 @@ final class FlowDatabase {
         for incomingLike in incoming {
             let key = "\(incomingLike.kind)_\(incomingLike.id)"
             if let existing = likes[key] {
-                if incomingLike.hlc > existing.hlc {
+                if SyncHLC.isNewer(incomingLike.hlc, than: existing.hlc) {
                     likes[key] = incomingLike
                     updated += 1
                 }
@@ -136,17 +137,23 @@ final class FlowDatabase {
 
     func setLiked(_ liked: Bool, video: VideoItem, kind: String = CanonicalLike.KIND_VIDEO) {
         let key = "\(kind)_\(video.id)"
-        if liked {
-            let like = CanonicalLike(
-                kind: kind, id: video.id, state: CanonicalLike.STATE_LIKED,
-                updatedAtMs: Int64(Date().timeIntervalSince1970 * 1000), hlc: UUID().uuidString,
-                meta: CanonicalLikeMeta(title: video.title, artist: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""),
-                title: video.title, channelName: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
-            )
-            likes[key] = like
-        } else {
-            likes.removeValue(forKey: key)
-        }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let meta = CanonicalLikeMeta(
+            title: video.title,
+            artist: video.channelName,
+            thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
+        )
+        likes[key] = CanonicalLike(
+            kind: kind,
+            id: video.id,
+            state: liked ? CanonicalLike.STATE_LIKED : CanonicalLike.STATE_NONE,
+            updatedAtMs: now,
+            hlc: SyncHLC.now(),
+            meta: meta,
+            title: video.title,
+            channelName: video.channelName,
+            thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
+        )
         save()
     }
 
@@ -161,7 +168,7 @@ final class FlowDatabase {
             isMusic: isMusic,
             isUserCreated: true,
             createdAtMs: now,
-            updatedHlc: UUID().uuidString
+            updatedHlc: SyncHLC.now()
         )
         playlists[id] = playlist
         save()
@@ -171,7 +178,7 @@ final class FlowDatabase {
     func renamePlaylist(syncId: String, title: String) {
         guard var pl = playlists[syncId] else { return }
         pl.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        pl.updatedHlc = UUID().uuidString
+        pl.updatedHlc = SyncHLC.now()
         playlists[syncId] = pl
         save()
     }
@@ -179,7 +186,7 @@ final class FlowDatabase {
     func deletePlaylist(syncId: String) {
         guard var pl = playlists[syncId], !pl.isProtected else { return }
         pl.deleted = true
-        pl.updatedHlc = UUID().uuidString
+        pl.updatedHlc = SyncHLC.now()
         playlists[syncId] = pl
         save()
     }
@@ -187,17 +194,22 @@ final class FlowDatabase {
     func addToPlaylist(syncId: String, item: CanonicalPlaylistItem) {
         guard var pl = playlists[syncId], !pl.deleted else { return }
         if !pl.items.contains(where: { $0.videoId == item.videoId && !$0.deleted }) {
-            pl.items.append(item)
+            var copy = item
+            if copy.hlc.isEmpty { copy.hlc = SyncHLC.now() }
+            pl.items.append(copy)
         }
-        pl.updatedHlc = UUID().uuidString
+        pl.updatedHlc = SyncHLC.now()
         playlists[syncId] = pl
         save()
     }
 
     func removeFromPlaylist(syncId: String, videoId: String) {
         guard var pl = playlists[syncId] else { return }
-        pl.items.removeAll { $0.videoId == videoId }
-        pl.updatedHlc = UUID().uuidString
+        for i in pl.items.indices where pl.items[i].videoId == videoId {
+            pl.items[i].deleted = true
+            pl.items[i].hlc = SyncHLC.now()
+        }
+        pl.updatedHlc = SyncHLC.now()
         playlists[syncId] = pl
         save()
     }

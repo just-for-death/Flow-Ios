@@ -372,6 +372,7 @@ enum ImportService {
                     id: info.videoId,
                     state: CanonicalLike.STATE_LIKED,
                     updatedAtMs: info.likedAt ?? Int64(Date().timeIntervalSince1970 * 1000),
+                    hlc: SyncHLC.now(),
                     meta: CanonicalLikeMeta(title: info.title, artist: info.channelName, thumbnailUrl: info.thumbnail),
                     title: info.title,
                     channelName: info.channelName,

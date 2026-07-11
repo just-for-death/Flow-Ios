@@ -31,6 +31,10 @@ workflows:
             -project Flow.xcodeproj \
             -scheme "$XCODE_SCHEME"
 
+      - name: Run Linux-parity logic checks (also runnable on Linux)
+        script: |
+          bash scripts/verify_logic.sh
+
       - name: Build for simulator (no signing needed)
         script: |
           xcodebuild build \

@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Network
+import UIKit
 
 // MARK: - Extensions
 extension String {
@@ -110,30 +111,73 @@ struct DirectionalKeys {
     func openKey(isHost: Bool) -> Data { isHost ? clientToHost : hostToClient }
 }
 
-// MARK: - SyncCodec (frame wire format)
-/// Wire format: [nonce(12)] [type(1)] [seq(8, BE)] [ciphertext+tag]
-/// AAD = sessionID || type || seq
+// MARK: - SyncCodec (frame wire format — byte-exact with Android SyncCodec.kt)
+/// Wire: `ver:u8 | frame_type:u8 | seq:u64 BE | nonce:12 | ciphertext∥tag`
+/// AAD: `ver || session_id(16) || frame_type || seq`
+/// Payload is gzip-compressed before AES-256-GCM seal.
 enum SyncCodec {
+    static let version: UInt8 = 0x01
+    static let headerLen = 10
+    static let aadLen = 26
+    static let minFrameLen = headerLen + FlowSyncCrypto.nonceLen + FlowSyncCrypto.tagLen // 38
+
     struct Opened { let frameType: UInt8; let seq: Int64; let plaintext: Data }
 
+    static func buildAad(sessionID: Data, frameType: UInt8, seq: Int64) -> Data {
+        precondition(sessionID.count == FlowSyncCrypto.sessionIDLen)
+        var aad = Data(capacity: aadLen)
+        aad.append(version)
+        aad.append(sessionID)
+        aad.append(frameType)
+        aad.append(writeLongBE(seq))
+        return aad
+    }
+
     static func seal(key: Data, sessionID: Data, type: UInt8, seq: Int64, plaintext: Data) throws -> Data {
+        let compressed = try FlowGzip.compress(plaintext)
         let nonce = FlowSyncCrypto.randomNonce()
-        let seqBytes = withUnsafeBytes(of: seq.bigEndian) { Data($0) }
-        let aad = sessionID + Data([type]) + seqBytes
-        let ciphertext = try FlowSyncCrypto.seal(key: key, nonce: nonce, plaintext: plaintext, aad: aad)
-        return nonce + Data([type]) + seqBytes + ciphertext
+        let aad = buildAad(sessionID: sessionID, frameType: type, seq: seq)
+        let ciphertext = try FlowSyncCrypto.seal(key: key, nonce: nonce, plaintext: compressed, aad: aad)
+
+        var out = Data(capacity: headerLen + FlowSyncCrypto.nonceLen + ciphertext.count)
+        out.append(version)
+        out.append(type)
+        out.append(writeLongBE(seq))
+        out.append(nonce)
+        out.append(ciphertext)
+        return out
     }
 
     static func open(key: Data, sessionID: Data, frame: Data) throws -> Opened {
-        guard frame.count >= 21 else { throw SyncError.frameTooShort }
-        let nonce     = frame[0..<12]
-        let type      = frame[12]
-        let seqBytes  = frame[13..<21]
-        let ct        = frame[21...]
-        let seq       = seqBytes.withUnsafeBytes { $0.load(as: Int64.self).byteSwapped }
-        let aad       = sessionID + Data([type]) + seqBytes
-        let plain     = try FlowSyncCrypto.open(key: key, nonce: Data(nonce), ciphertextAndTag: Data(ct), aad: Data(aad))
-        return Opened(frameType: type, seq: seq, plaintext: plain)
+        guard frame.count >= minFrameLen else { throw SyncError.frameTooShort }
+        guard frame[frame.startIndex] == version else {
+            throw SyncError.peerError(code: "bad_version", message: "unsupported frame version")
+        }
+        let type = frame[frame.startIndex + 1]
+        let seq = readLongBE(frame, offset: 2)
+        let nonceStart = frame.startIndex + headerLen
+        let nonce = frame[nonceStart..<(nonceStart + FlowSyncCrypto.nonceLen)]
+        let ct = frame[(nonceStart + FlowSyncCrypto.nonceLen)...]
+        let aad = buildAad(sessionID: sessionID, frameType: type, seq: seq)
+        let compressed = try FlowSyncCrypto.open(
+            key: key,
+            nonce: Data(nonce),
+            ciphertextAndTag: Data(ct),
+            aad: aad
+        )
+        let plaintext = try FlowGzip.decompress(compressed)
+        return Opened(frameType: type, seq: seq, plaintext: plaintext)
+    }
+
+    static func writeLongBE(_ value: Int64) -> Data {
+        var be = value.bigEndian
+        return withUnsafeBytes(of: &be) { Data($0) }
+    }
+
+    static func readLongBE(_ data: Data, offset: Int) -> Int64 {
+        let start = data.startIndex + offset
+        let slice = data[start..<(start + 8)]
+        return slice.withUnsafeBytes { $0.load(as: Int64.self).bigEndian }
     }
 }
 
@@ -219,70 +263,109 @@ enum SyncError: Error {
 }
 
 // MARK: - SyncConnection (WebSocket over LAN — same transport as Android)
-/// Wraps an NWConnection to a peer's WebSocket. Android uses OkHttp WebSocket;
-/// iOS uses Network framework NWConnection — same wire protocol.
+/// Android uses `ws://ip:port/flow-sync`. iOS mirrors that path for interoperability.
 actor SyncConnection {
+    static let wsPath = "/flow-sync"
+
     private var connection: NWConnection?
     private var listener: NWListener?
-    private var continuation: CheckedContinuation<Data, Error>?
+    private(set) var boundPort: UInt16 = 0
 
-    init(host: String, port: UInt16, isServer: Bool = false) {
-        if isServer {
-            // Setup listener
-            let params = NWParameters.tcp
-            params.defaultProtocolStack.applicationProtocols.insert(NWProtocolWebSocket.Options(), at: 0)
-            if let port = NWEndpoint.Port(rawValue: port) {
-                listener = try? NWListener(using: params, on: port)
-            }
-        } else {
-            let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
-            let params   = NWParameters.tcp
-            params.defaultProtocolStack.applicationProtocols.insert(NWProtocolWebSocket.Options(), at: 0)
-            connection = NWConnection(to: endpoint, using: params)
-        }
+    /// Client connecting to a peer (must use `/flow-sync` path).
+    init(host: String, port: UInt16) {
+        let url = URL(string: "ws://\(host):\(port)\(Self.wsPath)")!
+        let endpoint = NWEndpoint.url(url)
+        let params = NWParameters.tcp
+        let wsOptions = NWProtocolWebSocket.Options()
+        wsOptions.autoReplyPing = true
+        params.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
+        connection = NWConnection(to: endpoint, using: params)
+    }
+
+    /// Host listener on ephemeral port (port 0). Call `startListening()` then read `boundPort`.
+    init(asServer: Bool) {
+        precondition(asServer)
+        let params = NWParameters.tcp
+        let wsOptions = NWProtocolWebSocket.Options()
+        wsOptions.autoReplyPing = true
+        params.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
+        listener = try? NWListener(using: params, on: .any)
     }
 
     init(existingConnection: NWConnection) {
         connection = existingConnection
     }
 
-    func connect() async throws {
-        if let listener = listener {
-            return try await withCheckedThrowingContinuation { cont in
-                listener.stateUpdateHandler = { state in
-                    switch state {
-                    case .ready:
-                        print("Listening for incoming sync...")
-                    case .failed(let err):
+    /// Start server and return the OS-assigned port for the QR.
+    func startListening() async throws -> UInt16 {
+        guard let listener = listener else { throw SyncError.connectionClosed }
+        return try await withCheckedThrowingContinuation { cont in
+            var resumed = false
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    if let port = listener.port?.rawValue, !resumed {
+                        resumed = true
+                        Task { await self.setBoundPort(port) }
+                        cont.resume(returning: port)
+                    }
+                case .failed(let err):
+                    if !resumed {
+                        resumed = true
                         cont.resume(throwing: err)
-                    default: break
                     }
+                default: break
                 }
-                listener.newConnectionHandler = { [weak self] newConn in
-                    Task {
-                        await self?.accept(newConn: newConn)
-                        cont.resume()
-                    }
-                }
-                listener.start(queue: .global(qos: .utility))
             }
-        } else if let connection = connection {
-            return try await withCheckedThrowingContinuation { cont in
-                connection.stateUpdateHandler = { state in
-                    switch state {
-                    case .ready: cont.resume()
-                    case .failed(let err): cont.resume(throwing: err)
-                    default: break
-                    }
-                }
-                connection.start(queue: .global(qos: .utility))
+            listener.newConnectionHandler = { [weak self] newConn in
+                Task { await self?.accept(newConn: newConn) }
             }
-        } else {
-            throw SyncError.connectionClosed
+            listener.start(queue: .global(qos: .utility))
         }
     }
-    
+
+    private func setBoundPort(_ port: UInt16) { boundPort = port }
+
+    /// Wait until a peer connects (host only).
+    func awaitPeer() async throws {
+        guard listener != nil else { throw SyncError.connectionClosed }
+        if connection != nil { return }
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            // Poll until accept() sets connection
+            Task {
+                for _ in 0..<600 { // ~60s
+                    if await self.hasConnection() {
+                        cont.resume()
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                cont.resume(throwing: SyncError.connectionClosed)
+            }
+        }
+    }
+
+    private func hasConnection() -> Bool { connection != nil }
+
+    func connect() async throws {
+        guard let connection = connection else { throw SyncError.connectionClosed }
+        try await withCheckedThrowingContinuation { cont in
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready: cont.resume()
+                case .failed(let err): cont.resume(throwing: err)
+                default: break
+                }
+            }
+            connection.start(queue: .global(qos: .utility))
+        }
+    }
+
     private func accept(newConn: NWConnection) {
+        guard connection == nil else {
+            newConn.cancel()
+            return
+        }
         self.connection = newConn
         newConn.start(queue: .global(qos: .utility))
     }
@@ -302,7 +385,7 @@ actor SyncConnection {
     func receive() async throws -> Data? {
         guard let connection = connection else { throw SyncError.connectionClosed }
         return try await withCheckedThrowingContinuation { cont in
-            connection.receiveMessage { content, _, isComplete, error in
+            connection.receiveMessage { content, _, _, error in
                 if let error { cont.resume(throwing: error); return }
                 cont.resume(returning: content)
             }
@@ -330,19 +413,22 @@ final class FlowSyncProtocol {
     private let sessionID:  Data
     private let sasDigits:  String
     private let localHello: SyncHello
+    private let localSelection: SyncSelection
     private var chunkSize   = 1500
 
     var onProgress: ((String, Int, Int) -> Void)?
     var confirmSAS: ((String) async -> Bool) = { _ in true }
     var confirmConsent: (([String]) async -> Bool) = { _ in true }
 
-    init(connection: SyncConnection, isHost: Bool, masterKey: Data, sessionID: Data, localHello: SyncHello) {
+    init(connection: SyncConnection, isHost: Bool, masterKey: Data, sessionID: Data, localHello: SyncHello,
+         localSelection: SyncSelection? = nil) {
         self.conn = connection
         self.isHost = isHost
         self.sessionID = sessionID
         self.keys = FlowSyncCrypto.deriveKeys(masterKey: masterKey, sessionID: sessionID)
         self.sasDigits = FlowSyncCrypto.sas(masterKey: masterKey, sessionID: sessionID)
         self.localHello = localHello
+        self.localSelection = localSelection ?? SyncSelection(send: SyncCollection.iosSyncable, accept: SyncCollection.iosSyncable)
     }
 
     func run(role: Role,
@@ -351,8 +437,8 @@ final class FlowSyncProtocol {
     ) async throws -> (peer: SyncPeerInfo, stats: [String: SyncApplyStats]) {
 
         let peer = try await handshake()
-        _ = try await exchangeCapabilities()
-        _ = try await exchangeSelection()
+        let peerCaps = try await exchangeCapabilities()
+        let peerSelection = try await exchangeSelection()
 
         guard await confirmSAS(sasDigits) else {
             try await sendError(code: "sas_rejected", message: "SAS not confirmed")
@@ -361,7 +447,7 @@ final class FlowSyncProtocol {
 
         switch role {
         case .sender:
-            let stats = try await runSender(peer: peer, buildPayload: buildPayload)
+            let stats = try await runSender(peer: peer, peerSelection: peerSelection, peerCaps: peerCaps, buildPayload: buildPayload)
             return (peer, stats)
         case .receiver:
             let stats = try await runReceiver(peer: peer, applyReceived: applyReceived)
@@ -389,11 +475,12 @@ final class FlowSyncProtocol {
     }
 
     private func exchangeCapabilities() async throws -> SyncCapabilities {
-        let local = SyncCapabilities(collections: Dictionary(
-            SyncCollection.iosSyncable.map { col in
-                (col, SyncCapability(schema: 1, produce: true, consume: true))
-            }, uniquingKeysWith: { a, _ in a }
-        ))
+        var caps: [String: SyncCapability] = [:]
+        for col in SyncCollection.iosSyncable {
+            let schema = col == SyncCollection.flowNeuroBrain ? 13 : 1
+            caps[col] = SyncCapability(schema: schema, produce: true, consume: true)
+        }
+        let local = SyncCapabilities(collections: caps)
         if !isHost {
             try await sendFrame(type: FrameType.capabilities, value: local)
             return try decode(SyncCapabilities.self, from: try await expectFrame(type: FrameType.capabilities))
@@ -405,21 +492,25 @@ final class FlowSyncProtocol {
     }
 
     private func exchangeSelection() async throws -> SyncSelection {
-        let local = SyncSelection(send: SyncCollection.iosSyncable, accept: SyncCollection.iosSyncable)
         if !isHost {
-            try await sendFrame(type: FrameType.selection, value: local)
+            try await sendFrame(type: FrameType.selection, value: localSelection)
             return try decode(SyncSelection.self, from: try await expectFrame(type: FrameType.selection))
         } else {
             let peer = try await expectFrame(type: FrameType.selection)
-            try await sendFrame(type: FrameType.selection, value: local)
+            try await sendFrame(type: FrameType.selection, value: localSelection)
             return try decode(SyncSelection.self, from: peer)
         }
     }
 
     // MARK: - Sender
     private func runSender(peer: SyncPeerInfo,
+                           peerSelection: SyncSelection,
+                           peerCaps: SyncCapabilities,
                            buildPayload: ([String]) async throws -> [String: [String]]) async throws -> [String: SyncApplyStats] {
-        let payload = try await buildPayload(SyncCollection.iosSyncable)
+        let toSend = localSelection.send.filter { col in
+            peerSelection.accept.contains(col) && (peerCaps.collections[col]?.consume ?? false)
+        }
+        let payload = try await buildPayload(toSend)
 
         // 1. Manifest
         let manifest = SyncManifest(collections: payload.mapValues { lines in
@@ -467,7 +558,7 @@ final class FlowSyncProtocol {
                              applyReceived: (SyncPeerInfo, [String: [String]]) async throws -> [String: SyncApplyStats]) async throws -> [String: SyncApplyStats] {
         let manifestData = try await expectFrame(type: FrameType.manifest)
         let manifest = try decode(SyncManifest.self, from: manifestData)
-        let incoming = Array(manifest.collections.keys)
+        let incoming = Array(manifest.collections.keys).filter { localSelection.accept.contains($0) }
 
         // User consent
         guard await confirmConsent(incoming) else {
@@ -499,7 +590,8 @@ final class FlowSyncProtocol {
             received[collection] = lines
         }
 
-        let stats = try await applyReceived(peer, received)
+        let toApply = received.filter { localSelection.accept.contains($0.key) }
+        let stats = try await applyReceived(peer, toApply)
         try await sendFrame(type: FrameType.applyResult, value: SyncApplyResult(collections: stats))
         return stats
     }
@@ -581,24 +673,30 @@ final class SyncManager {
         let sid: String
         let k: String
         let ip: String
-        let p: UInt16
+        let p: Int
         let d: String
-        let exp: TimeInterval
+        /// Epoch seconds (integer) — Android parses as Long.
+        let exp: Int64
         let role: String
     }
 
-    func generateQRPayload(listeningPort: UInt16) -> QRPayload {
-        let sid = FlowSyncCrypto.randomSessionID()
-        let key = FlowSyncCrypto.randomMasterKey()
-        return QRPayload(
+    static func base64URLEncode(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    func generateQRPayload(listeningPort: UInt16, sessionID: Data, masterKey: Data, role: String = "sender") -> QRPayload {
+        QRPayload(
             v: 1,
-            sid: sid.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""),
-            k: key.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""),
+            sid: Self.base64URLEncode(sessionID),
+            k: Self.base64URLEncode(masterKey),
             ip: getLocalIPAddress() ?? "0.0.0.0",
-            p: listeningPort,
+            p: Int(listeningPort),
             d: UIDevice.current.name.prefix(64).description,
-            exp: Date().timeIntervalSince1970 + 120, // 2 mins TTL
-            role: "sender"
+            exp: Int64(Date().timeIntervalSince1970) + 120,
+            role: role == "receiver" ? "receiver" : "sender"
         )
     }
 
@@ -620,34 +718,129 @@ final class SyncManager {
         return address
     }
 
+    // MARK: - Host session (show QR, wait for peer)
+    /// Binds ephemeral port, returns QR JSON + starts protocol as [role].
+    func startHost(role: FlowSyncProtocol.Role = .sender, collections: [String] = SyncCollection.iosSyncable) async -> String? {
+        state = .discovering
+        let sid = FlowSyncCrypto.randomSessionID()
+        let key = FlowSyncCrypto.randomMasterKey()
+        let connection = SyncConnection(asServer: true)
+        do {
+            let port = try await connection.startListening()
+            let payload = await MainActor.run {
+                generateQRPayload(
+                    listeningPort: port,
+                    sessionID: sid,
+                    masterKey: key,
+                    role: role == .sender ? "sender" : "receiver"
+                )
+            }
+            guard let json = try? JSONEncoder().encode(payload),
+                  let qrText = String(data: json, encoding: .utf8) else {
+                state = .failed(SyncError.connectionClosed)
+                return nil
+            }
+            Task {
+                do {
+                    try await connection.awaitPeer()
+                    await self.runProtocol(
+                        connection: connection,
+                        isHost: true,
+                        masterKey: key,
+                        sessionID: sid,
+                        role: role,
+                        collections: collections
+                    )
+                } catch {
+                    await MainActor.run { self.state = .failed(error) }
+                    await connection.close()
+                }
+            }
+            return qrText
+        } catch {
+            state = .failed(error)
+            return nil
+        }
+    }
+
+    // MARK: - Join session (scan QR)
+    func joinFromQR(_ qrText: String, collections: [String] = SyncCollection.iosSyncable) async {
+        guard let data = qrText.data(using: .utf8),
+              let qr = try? JSONDecoder().decode(QRPayload.self, from: data),
+              let masterKey = qr.k.base64URLDecodedData(),
+              let sid = qr.sid.base64URLDecodedData() else {
+            state = .failed(SyncError.peerError(code: "bad_qr", message: "Invalid QR payload"))
+            return
+        }
+        let now = Int64(Date().timeIntervalSince1970)
+        if qr.exp <= now {
+            state = .failed(SyncError.peerError(code: "qr_expired", message: "QR code expired"))
+            return
+        }
+        if qr.v != 1 {
+            state = .failed(SyncError.peerError(code: "bad_qr", message: "Unsupported QR version"))
+            return
+        }
+        // Scanner takes the complement of the displayer's role.
+        let ourRole: FlowSyncProtocol.Role = (qr.role == "receiver") ? .sender : .receiver
+        await syncWithPeer(
+            host: qr.ip,
+            port: UInt16(clamping: qr.p),
+            masterKey: masterKey,
+            sessionID: sid,
+            isHost: false,
+            role: ourRole,
+            collections: collections
+        )
+    }
+
     // MARK: - Initiate sync
-    func syncWithPeer(host: String, port: UInt16, masterKey: Data, sessionID: Data? = nil, isHost: Bool, role: FlowSyncProtocol.Role) async {
+    func syncWithPeer(host: String, port: UInt16, masterKey: Data, sessionID: Data? = nil, isHost: Bool, role: FlowSyncProtocol.Role, collections: [String] = SyncCollection.iosSyncable) async {
         state = .connecting
         let sid = sessionID ?? FlowSyncCrypto.randomSessionID()
-        let deviceName = await MainActor.run { UIDevice.current.name }
-        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString ?? "ios-\(UUID().uuidString)" }
-        let hello     = SyncHello(
-            deviceId:   deviceId,
-            deviceName: deviceName,
-            platform:   "iOS",
-            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-            protocol:   1
-        )
-
-        let connection = SyncConnection(host: host, port: port, isServer: isHost)
+        let connection = SyncConnection(host: host, port: port)
         do {
             try await connection.connect()
         } catch {
             state = .failed(error); return
         }
+        await runProtocol(connection: connection, isHost: isHost, masterKey: masterKey, sessionID: sid, role: role, collections: collections)
+    }
 
-        let proto = FlowSyncProtocol(connection: connection, isHost: isHost, masterKey: masterKey, sessionID: sid, localHello: hello)
+    private func runProtocol(connection: SyncConnection, isHost: Bool, masterKey: Data, sessionID: Data, role: FlowSyncProtocol.Role, collections: [String]) async {
+        let deviceName = await MainActor.run { UIDevice.current.name }
+        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString ?? "ios-\(UUID().uuidString)" }
+        let hello = SyncHello(
+            deviceId: deviceId,
+            deviceName: deviceName,
+            platform: "iOS",
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+            protocol: 1
+        )
+        let selected = collections.isEmpty ? SyncCollection.iosSyncable : collections
+        let selection: SyncSelection = {
+            switch role {
+            case .sender:
+                return SyncSelection(send: selected, accept: [])
+            case .receiver:
+                // Match Android: receiver accepts all syncable collections.
+                return SyncSelection(send: [], accept: SyncCollection.iosSyncable)
+            }
+        }()
+
+        let proto = FlowSyncProtocol(
+            connection: connection,
+            isHost: isHost,
+            masterKey: masterKey,
+            sessionID: sessionID,
+            localHello: hello,
+            localSelection: selection
+        )
         proto.onProgress = { [weak self] _, done, total in
             self?.state = .syncing(progress: Double(done) / Double(max(1, total)))
         }
         proto.confirmSAS = { [weak self] sas in
             await MainActor.run { [weak self] in self?.sasCode = sas }
-            // Wait for user to confirm
             return await self?.awaitSASConfirmation() ?? false
         }
         proto.confirmConsent = { [weak self] collections in
@@ -685,7 +878,13 @@ final class SyncManager {
             switch collection {
             case SyncCollection.flowNeuroBrain:
                 let brain = NeuroEngine.shared.brain
-                let data  = try encoder.encode(brain)
+                let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? SyncHLC.nodeId
+                let canonical = CanonicalBrainMapper.toCanonical(
+                    brain: brain,
+                    deviceId: deviceId,
+                    hlc: SyncHLC.now()
+                )
+                let data = try encoder.encode(canonical)
                 payload[collection] = [String(data: data, encoding: .utf8) ?? ""]
 
             case SyncCollection.watchHistory:
@@ -709,7 +908,7 @@ final class SyncManager {
                 }.filter { !$0.isEmpty }
 
             case SyncCollection.settings:
-                payload[collection] = SyncSettingsMapper.exportLines()
+                payload[collection] = SyncSettingsMapper.exportLines(hlc: SyncHLC.now())
 
             case SyncCollection.playlists:
                 let lists = FlowDatabase.shared.getPlaylists()
@@ -772,10 +971,24 @@ final class SyncManager {
             switch collection {
             case SyncCollection.flowNeuroBrain:
                 if let line = lines.first,
-                   let data = line.data(using: .utf8),
-                   let remoteBrain = try? JSONDecoder().decode(UserBrain.self, from: data) {
-                    try? NeuroEngine.shared.mergeBrain(remoteBrain)
-                    stats[collection] = SyncApplyStats(added: 0, updated: 1, skipped: 0, tombstoned: 0)
+                   let data = line.data(using: .utf8) {
+                    let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? SyncHLC.nodeId
+                    let local = NeuroEngine.shared.brain
+                    if let remoteCanonical = try? JSONDecoder().decode(CanonicalBrain.self, from: data) {
+                        let localCanonical = CanonicalBrainMapper.toCanonical(
+                            brain: local,
+                            deviceId: deviceId,
+                            hlc: SyncHLC.now()
+                        )
+                        let merged = CanonicalBrainMapper.mergeCanonical(local: localCanonical, remote: remoteCanonical)
+                        let written = CanonicalBrainMapper.writeBack(merged: merged, local: local)
+                        NeuroEngine.shared.replaceBrain(written)
+                        stats[collection] = SyncApplyStats(added: 0, updated: 1, skipped: 0, tombstoned: 0)
+                    } else if let remoteBrain = try? JSONDecoder().decode(UserBrain.self, from: data) {
+                        // Legacy iOS-only payloads
+                        try? NeuroEngine.shared.mergeBrain(remoteBrain)
+                        stats[collection] = SyncApplyStats(added: 0, updated: 1, skipped: 0, tombstoned: 0)
+                    }
                 }
 
             case SyncCollection.watchHistory:
@@ -942,6 +1155,17 @@ final class SyncManager {
     func confirmConsent(_ accepted: Bool) {
         pendingConsentCollections = []
         _consentContinuation?.resume(returning: accepted)
+        _consentContinuation = nil
+    }
+
+    func reset() {
+        state = .idle
+        sasCode = ""
+        sasVerified = false
+        pendingConsentCollections = []
+        _sasContinuation?.resume(returning: false)
+        _sasContinuation = nil
+        _consentContinuation?.resume(returning: false)
         _consentContinuation = nil
     }
 }

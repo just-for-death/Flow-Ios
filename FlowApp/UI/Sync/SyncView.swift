@@ -1,27 +1,42 @@
 import SwiftUI
 import AVFoundation
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import UIKit
 
 // MARK: - SyncView
-/// Device-to-device sync UI — mirrors the Android FLOW-SYNC/1 onboarding flow.
+/// Device-to-device sync UI — mirrors Android FLOW-SYNC/1 (role × transport independent).
 struct SyncView: View {
     @Environment(SyncManager.self) private var sync
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: SyncMode = .chooser
-    @State private var showScanner = false
+    @State private var step: Step = .chooser
+    @State private var selectedCollections: Set<String> = Set(SyncCollection.iosSyncable)
 
-    enum SyncMode { case chooser, host, join }
+    enum Step {
+        case chooser
+        case sendSelect
+        case sendHost
+        case sendJoin
+        case receiveTransport
+        case receiveHost
+        case receiveJoin
+    }
+
+    private static let collectionKeys = SyncCollection.iosSyncable
 
     var body: some View {
         NavigationStack {
             ZStack {
                 FlowTheme.Colors.background.ignoresSafeArea()
                 Group {
-                    switch mode {
+                    switch step {
                     case .chooser: chooserView
-                    case .host:   hostView
-                    case .join:   joinView
+                    case .sendSelect: sendSelectView
+                    case .receiveTransport: receiveTransportView
+                    case .sendHost, .receiveHost:
+                        hostSessionView(role: step == .sendHost ? .sender : .receiver)
+                    case .sendJoin, .receiveJoin:
+                        joinSessionView(collections: Array(selectedCollections))
                     }
                 }
             }
@@ -30,8 +45,15 @@ struct SyncView: View {
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                    Button(step == .chooser ? "Cancel" : "Back") {
+                        if step == .chooser {
+                            dismiss()
+                        } else {
+                            sync.reset()
+                            step = .chooser
+                        }
+                    }
+                    .foregroundStyle(FlowTheme.Colors.onSurface)
                 }
             }
             .overlay {
@@ -57,7 +79,7 @@ struct SyncView: View {
                 .font(FlowTheme.Typography.headlineMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurface)
 
-            Text("Transfer your watch history, liked videos, playlists, settings, and FlowNeuro brain between devices over your local Wi-Fi. No internet required.")
+            Text("Transfer watch history, likes, playlists, settings, subscriptions, and FlowNeuro over local Wi‑Fi. Role (send/receive) is independent of who shows the QR.")
                 .font(FlowTheme.Typography.bodyMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
@@ -66,28 +88,14 @@ struct SyncView: View {
             Spacer()
 
             VStack(spacing: FlowTheme.Spacing.md) {
-                Button {
-                    mode = .host
-                } label: {
-                    Label("Show QR Code (Host)", systemImage: "qrcode")
-                        .font(FlowTheme.Typography.titleMedium)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(FlowTheme.Spacing.md)
-                        .background(FlowTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
+                Button { step = .sendSelect } label: {
+                    syncButtonLabel("Send data", systemImage: "square.and.arrow.up", filled: true)
                 }
-
                 Button {
-                    mode = .join
+                    selectedCollections = Set(Self.collectionKeys)
+                    step = .receiveTransport
                 } label: {
-                    Label("Scan QR Code (Join)", systemImage: "camera.viewfinder")
-                        .font(FlowTheme.Typography.titleMedium)
-                        .foregroundStyle(FlowTheme.Colors.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(FlowTheme.Spacing.md)
-                        .background(FlowTheme.Colors.surfaceVariant)
-                        .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
+                    syncButtonLabel("Receive data", systemImage: "square.and.arrow.down", filled: false)
                 }
             }
             .padding(.horizontal, FlowTheme.Spacing.xl)
@@ -95,12 +103,91 @@ struct SyncView: View {
         }
     }
 
-    // MARK: - Host mode (show QR)
-    private var hostView: some View {
+    // MARK: - Send: pick collections then transport
+    private var sendSelectView: some View {
+        VStack(spacing: FlowTheme.Spacing.lg) {
+            Text("Choose what to send")
+                .font(FlowTheme.Typography.titleMedium)
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+
+            List {
+                ForEach(Self.collectionKeys, id: \.self) { key in
+                    Button {
+                        if selectedCollections.contains(key) {
+                            selectedCollections.remove(key)
+                        } else {
+                            selectedCollections.insert(key)
+                        }
+                    } label: {
+                        HStack {
+                            Text(SyncCollection.displayName(for: key))
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            Spacer()
+                            Image(systemName: selectedCollections.contains(key) ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(FlowTheme.Colors.primary)
+                        }
+                    }
+                    .listRowBackground(FlowTheme.Colors.surfaceVariant)
+                }
+            }
+            .scrollContentBackground(.hidden)
+
+            VStack(spacing: FlowTheme.Spacing.md) {
+                Button {
+                    guard !selectedCollections.isEmpty else { return }
+                    step = .sendHost
+                } label: {
+                    syncButtonLabel("Show QR Code", systemImage: "qrcode", filled: true)
+                }
+                .disabled(selectedCollections.isEmpty)
+
+                Button {
+                    guard !selectedCollections.isEmpty else { return }
+                    step = .sendJoin
+                } label: {
+                    syncButtonLabel("Scan QR Code", systemImage: "camera.viewfinder", filled: false)
+                }
+                .disabled(selectedCollections.isEmpty)
+            }
+            .padding(.horizontal, FlowTheme.Spacing.xl)
+            .padding(.bottom, FlowTheme.Spacing.xl)
+        }
+            .padding(.top, FlowTheme.Spacing.md)
+    }
+
+    private var receiveTransportView: some View {
+        VStack(spacing: FlowTheme.Spacing.xl) {
+            Spacer()
+            Text("How should this device connect?")
+                .font(FlowTheme.Typography.titleMedium)
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+            Text("Show a QR if the other device will scan; scan if the other device is showing a QR.")
+                .font(FlowTheme.Typography.bodyMedium)
+                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, FlowTheme.Spacing.xl)
+            Spacer()
+            VStack(spacing: FlowTheme.Spacing.md) {
+                Button { step = .receiveHost } label: {
+                    syncButtonLabel("Show QR Code", systemImage: "qrcode", filled: true)
+                }
+                Button { step = .receiveJoin } label: {
+                    syncButtonLabel("Scan QR Code", systemImage: "camera.viewfinder", filled: false)
+                }
+            }
+            .padding(.horizontal, FlowTheme.Spacing.xl)
+            .padding(.bottom, FlowTheme.Spacing.xxl)
+        }
+    }
+
+    private func hostSessionView(role: FlowSyncProtocol.Role) -> some View {
         Group {
             switch sync.state {
             case .idle, .discovering:
-                SyncHostQRView()
+                SyncHostQRView(
+                    role: role,
+                    collections: role == .sender ? Array(selectedCollections) : SyncCollection.iosSyncable
+                )
             case .connecting:
                 SyncProgressView(message: "Connecting…", progress: nil)
             case .syncing(let p):
@@ -108,22 +195,24 @@ struct SyncView: View {
             case .done(let peer):
                 SyncDoneView(peerName: peer.deviceName) { dismiss() }
             case .failed(let err):
-                SyncErrorView(error: err) { mode = .chooser }
+                SyncErrorView(error: err) { sync.reset(); step = .chooser }
             }
         }
     }
 
-    // MARK: - Join mode (scan QR then connect)
-    private var joinView: some View {
+    private func joinSessionView(collections: [String]) -> some View {
         Group {
             switch sync.state {
             case .idle, .discovering:
-                SyncQRScannerView { payload in
-                    guard let data = payload.data(using: .utf8),
-                          let qr = try? JSONDecoder().decode(SyncManager.QRPayload.self, from: data),
-                          let masterKey = qr.k.base64URLDecodedData(),
-                          let sid = qr.sid.base64URLDecodedData() else { return }
-                    Task { await sync.syncWithPeer(host: qr.ip, port: qr.p, masterKey: masterKey, sessionID: sid, isHost: false, role: .receiver) }
+                VStack(spacing: FlowTheme.Spacing.md) {
+                    Text("Scan the QR on the other device")
+                        .font(FlowTheme.Typography.bodyMedium)
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                    SyncQRScannerView { payload in
+                        Task { await sync.joinFromQR(payload, collections: collections) }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
+                    .padding()
                 }
             case .connecting:
                 SyncProgressView(message: "Connecting…", progress: nil)
@@ -132,31 +221,40 @@ struct SyncView: View {
             case .done(let peer):
                 SyncDoneView(peerName: peer.deviceName) { dismiss() }
             case .failed(let err):
-                SyncErrorView(error: err) { mode = .chooser }
+                SyncErrorView(error: err) { sync.reset(); step = .chooser }
             }
         }
+    }
+
+    private func syncButtonLabel(_ title: String, systemImage: String, filled: Bool) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(FlowTheme.Typography.titleMedium)
+            .foregroundStyle(filled ? Color.white : FlowTheme.Colors.primary)
+            .frame(maxWidth: .infinity)
+            .padding(FlowTheme.Spacing.md)
+            .background(filled ? FlowTheme.Colors.primary : FlowTheme.Colors.surfaceVariant)
+            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
     }
 }
 
 // MARK: - SyncHostQRView
-import CoreImage.CIFilterBuiltins
-
 struct SyncHostQRView: View {
     @Environment(SyncManager.self) private var sync
-    @State private var qrPayload: SyncManager.QRPayload?
-    @State private var showSAS   = false
+    let role: FlowSyncProtocol.Role
+    let collections: [String]
+    @State private var qrString: String?
+    @State private var didStart = false
 
     var body: some View {
         VStack(spacing: FlowTheme.Spacing.lg) {
-            Text("On your Android device, go to\nSettings → Sync → Scan QR Code")
+            Text(role == .sender
+                 ? "On the other device, choose Receive → Scan QR"
+                 : "On the other device, choose Send → Scan QR")
                 .font(FlowTheme.Typography.bodyMedium)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
 
-            if let qrPayload = qrPayload,
-               let json = try? JSONEncoder().encode(qrPayload),
-               let qrString = String(data: json, encoding: .utf8),
-               let uiImage = generateQRCode(from: qrString) {
+            if let qrString, let uiImage = generateQRCode(from: qrString) {
                 Image(uiImage: uiImage)
                     .interpolation(.none)
                     .resizable()
@@ -172,7 +270,7 @@ struct SyncHostQRView: View {
                 }
             }
 
-            Text("Waiting for Android to connect…")
+            Text("Waiting for peer…")
                 .font(FlowTheme.Typography.bodySmall)
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
 
@@ -185,14 +283,11 @@ struct SyncHostQRView: View {
             }
         }
         .padding(FlowTheme.Spacing.xl)
-        .onAppear {
-            let port: UInt16 = 9340
-            let payload = sync.generateQRPayload(listeningPort: port)
-            qrPayload = payload
-            Task {
-                if let key = payload.k.base64URLDecodedData(), let sid = payload.sid.base64URLDecodedData() {
-                    await sync.syncWithPeer(host: "0.0.0.0", port: port, masterKey: key, sessionID: sid, isHost: true, role: .sender)
-                }
+        .task {
+            guard !didStart else { return }
+            didStart = true
+            if let text = await sync.startHost(role: role, collections: collections) {
+                qrString = text
             }
         }
     }
@@ -201,11 +296,9 @@ struct SyncHostQRView: View {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-
-        if let outputImage = filter.outputImage {
-            if let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
-                return UIImage(cgImage: cgImage)
-            }
+        if let outputImage = filter.outputImage,
+           let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            return UIImage(cgImage: cgImage)
         }
         return nil
     }
@@ -226,7 +319,6 @@ struct SASConfirmView: View {
                 .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
 
-            // 6-digit code display
             HStack(spacing: FlowTheme.Spacing.sm) {
                 ForEach(Array(sync.sasCode.enumerated()), id: \.0) { _, digit in
                     Text(String(digit))
@@ -239,25 +331,21 @@ struct SASConfirmView: View {
             }
 
             HStack(spacing: FlowTheme.Spacing.md) {
-                Button("Reject") {
-                    sync.confirmSAS(false)
-                }
-                .font(FlowTheme.Typography.labelLarge)
-                .foregroundStyle(FlowTheme.Colors.error)
-                .frame(maxWidth: .infinity)
-                .padding(FlowTheme.Spacing.sm)
-                .background(FlowTheme.Colors.errorContainer)
-                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+                Button("Reject") { sync.confirmSAS(false) }
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(FlowTheme.Colors.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(FlowTheme.Spacing.sm)
+                    .background(FlowTheme.Colors.errorContainer)
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
 
-                Button("Confirm") {
-                    sync.confirmSAS(true)
-                }
-                .font(FlowTheme.Typography.labelLarge)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(FlowTheme.Spacing.sm)
-                .background(FlowTheme.Colors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+                Button("Confirm") { sync.confirmSAS(true) }
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(FlowTheme.Spacing.sm)
+                    .background(FlowTheme.Colors.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
             }
         }
         .padding(FlowTheme.Spacing.md)
@@ -291,25 +379,21 @@ struct SyncConsentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: FlowTheme.Spacing.md) {
-                Button("Decline") {
-                    sync.confirmConsent(false)
-                }
-                .font(FlowTheme.Typography.labelLarge)
-                .foregroundStyle(FlowTheme.Colors.error)
-                .frame(maxWidth: .infinity)
-                .padding(FlowTheme.Spacing.sm)
-                .background(FlowTheme.Colors.errorContainer)
-                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+                Button("Decline") { sync.confirmConsent(false) }
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(FlowTheme.Colors.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(FlowTheme.Spacing.sm)
+                    .background(FlowTheme.Colors.errorContainer)
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
 
-                Button("Accept") {
-                    sync.confirmConsent(true)
-                }
-                .font(FlowTheme.Typography.labelLarge)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(FlowTheme.Spacing.sm)
-                .background(FlowTheme.Colors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+                Button("Accept") { sync.confirmConsent(true) }
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(FlowTheme.Spacing.sm)
+                    .background(FlowTheme.Colors.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
             }
         }
         .padding(FlowTheme.Spacing.md)
@@ -318,7 +402,7 @@ struct SyncConsentView: View {
     }
 }
 
-// MARK: - QR Scanner (wraps AVFoundation)
+// MARK: - QR Scanner
 struct SyncQRScannerView: UIViewRepresentable {
     let onCodeScanned: (String) -> Void
 
@@ -350,11 +434,14 @@ struct SyncQRScannerView: UIViewRepresentable {
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         let onCode: (String) -> Void
         var previewLayer: AVCaptureVideoPreviewLayer?
+        private var didFire = false
         init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
         func metadataOutput(_ output: AVCaptureMetadataOutput,
                             didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
-            guard let obj = objects.first as? AVMetadataMachineReadableCodeObject,
+            guard !didFire,
+                  let obj = objects.first as? AVMetadataMachineReadableCodeObject,
                   let str = obj.stringValue else { return }
+            didFire = true
             onCode(str)
         }
     }

@@ -491,6 +491,22 @@ final class NeuroEngine {
         }
     }
 
+    /// Apply a brain already merged in CanonicalBrain space (writeBack result).
+    func replaceBrain(_ merged: UserBrain) {
+        brainQueue.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.brain = merged
+                self.idfWordFrequency = merged.idfWordFrequency
+                self.idfTotalDocuments = merged.idfTotalDocuments
+                for (id, pct) in merged.watchHistoryMap {
+                    self.watchHistory[id] = WatchEntry(percentWatched: pct, timestamp: Date().timeIntervalSince1970)
+                }
+                self.scheduleDebouncedSave()
+            }
+        }
+    }
+
     func restoreContentPreferences(
         preferredTopics: Set<String>,
         blockedTopics: Set<String>,

@@ -253,16 +253,11 @@ struct MusicPlayerView: View {
                     
                     Button {
                         if let video = player.currentVideo {
-                            let like = CanonicalLike(
-                                kind: CanonicalLike.KIND_MUSIC, id: video.id, state: CanonicalLike.STATE_LIKED,
-                                updatedAtMs: Int64(Date().timeIntervalSince1970 * 1000), hlc: UUID().uuidString,
-                                meta: CanonicalLikeMeta(title: video.title, artist: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""),
-                                title: video.title, channelName: video.channelName, thumbnailUrl: video.thumbnailURL?.absoluteString ?? ""
-                            )
-                            _ = FlowDatabase.shared.mergeLikes([like])
+                            let liked = !FlowDatabase.shared.isLiked(kind: CanonicalLike.KIND_MUSIC, id: video.id)
+                            FlowDatabase.shared.setLiked(liked, video: video, kind: CanonicalLike.KIND_MUSIC)
                         }
                     } label: {
-                        Image(systemName: "heart")
+                        Image(systemName: FlowDatabase.shared.isLiked(kind: CanonicalLike.KIND_MUSIC, id: player.currentVideo?.id ?? "") ? "heart.fill" : "heart")
                             .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
                     
