@@ -48,7 +48,8 @@ final class RecognitionService {
                 let result = RecognitionResult(
                     title: item.title ?? "Unknown",
                     artist: item.artist ?? "",
-                    shazamURL: item.shazamURL
+                    // Newer SDKs dropped `shazamURL`; prefer catalog web URL, then Apple Music.
+                    shazamURL: item.webURL ?? item.appleMusicURL
                 )
                 lastResult = result
                 RecognitionHistoryStore.shared.add(result)
