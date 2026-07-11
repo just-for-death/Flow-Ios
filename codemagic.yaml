@@ -154,13 +154,13 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_IDENTITY="" \
             ENTITLEMENTS_REQUIRED=NO \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
             | xcpretty --color
-
       - name: Package IPA
         script: |
           mkdir -p build/Payload
