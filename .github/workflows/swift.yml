@@ -1,22 +1,80 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
+# Flow iOS CI — not a Swift Package Manager project (no Package.swift).
+# Linux: pure-logic + feature suite (no Xcode needed).
+# macOS: XcodeGen + simulator build + unit tests.
 
-name: Swift
+name: Flow iOS
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
+
+concurrency:
+  group: flow-ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-
-    runs-on: macos-latest
-
+  linux-logic:
+    name: Linux logic checks
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+      - uses: actions/checkout@v5
+
+      - name: Install Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: Run Linux feature suite
+        run: bash scripts/test_on_linux.sh
+
+  ios-simulator:
+    name: iOS Simulator build + test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Flow.xcodeproj \
+            -scheme Flow
+
+      - name: Build (Simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || xcodebuild build \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            || xcodebuild test \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
