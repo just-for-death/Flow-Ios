@@ -147,6 +147,10 @@ struct SettingsView: View {
                 Section("SponsorBlock") {
                     Toggle("Enable SponsorBlock", isOn: $sbEnabled)
                         .onChange(of: sbEnabled) { _, v in SponsorBlockService.shared.isEnabled = v }
+                    Toggle("Submit segments from player", isOn: Binding(
+                        get: { PlayerPreferences.shared.sbSubmitEnabled },
+                        set: { PlayerPreferences.shared.sbSubmitEnabled = $0 }
+                    ))
                     if sbEnabled {
                         ForEach(SponsorCategory.allCases, id: \.self) { cat in
                             Toggle(cat.displayName, isOn: Binding(

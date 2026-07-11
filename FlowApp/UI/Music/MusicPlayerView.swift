@@ -10,15 +10,17 @@ struct MusicHomeView: View {
     @State private var showRecognition = false
     @State private var searchQuery = ""
     @State private var tab: MusicTab = .home
+    @State private var isSearchPresented = false
 
     private enum MusicTab: String, CaseIterable, Identifiable {
-        case home, charts, explore
+        case home, charts, explore, moods
         var id: String { rawValue }
         var label: String {
             switch self {
             case .home: return "Home"
             case .charts: return "Charts"
             case .explore: return "Explore"
+            case .moods: return "Moods & genres"
             }
         }
     }
@@ -94,19 +96,18 @@ struct MusicHomeView: View {
                             .foregroundStyle(FlowTheme.Colors.onSurface)
                     }
                     .accessibilityLabel("Identify song")
-                    Button {
-                        // Focus search field via searchable
-                    } label: {
+                    Button { isSearchPresented = true } label: {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(FlowTheme.Colors.onSurface)
                     }
+                    .accessibilityLabel("Search music")
                     NavigationLink { SettingsView() } label: {
                         Image(systemName: "gearshape")
                             .foregroundStyle(FlowTheme.Colors.onSurface)
                     }
                 }
             }
-            .searchable(text: $searchQuery, prompt: "Search songs")
+            .searchable(text: $searchQuery, isPresented: $isSearchPresented, prompt: "Search songs")
             .onSubmit(of: .search) {
                 Task { await searchMusic() }
             }
@@ -144,6 +145,9 @@ struct MusicHomeView: View {
             params = "ggMGCgQIgAQ%3D"
         case .explore:
             browseID = "FEmusic_explore"
+            params = nil
+        case .moods:
+            browseID = "FEmusic_moods_and_genres"
             params = nil
         }
 

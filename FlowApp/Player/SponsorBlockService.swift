@@ -119,6 +119,35 @@ final class SponsorBlockService {
         _ = try? await URLSession.shared.data(for: req)
     }
 
+    /// Submit a new skip segment (Android SbSubmitSegmentDialog).
+    @discardableResult
+    func submitSegment(
+        videoID: String,
+        startTime: Double,
+        endTime: Double,
+        category: SponsorCategory,
+        videoDuration: Double
+    ) async -> Bool {
+        guard endTime > startTime, startTime >= 0 else { return false }
+        var comps = URLComponents(string: "\(baseURL)/skipSegments")!
+        comps.queryItems = [
+            URLQueryItem(name: "videoID", value: videoID),
+            URLQueryItem(name: "startTime", value: String(startTime)),
+            URLQueryItem(name: "endTime", value: String(endTime)),
+            URLQueryItem(name: "category", value: category.rawValue),
+            URLQueryItem(name: "userID", value: userID),
+            URLQueryItem(name: "userAgent", value: "FlowYouTube/1.0"),
+            URLQueryItem(name: "service", value: "YouTube"),
+            URLQueryItem(name: "videoDuration", value: String(Int(videoDuration)))
+        ]
+        guard let url = comps.url else { return false }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        guard let (_, response) = try? await URLSession.shared.data(for: req),
+              let http = response as? HTTPURLResponse else { return false }
+        return (200..<300).contains(http.statusCode)
+    }
+
     enum VoteType: Int { case upvote = 1, downvote = 0 }
 
     private var userID: String {

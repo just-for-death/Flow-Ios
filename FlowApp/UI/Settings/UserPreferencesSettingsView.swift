@@ -196,7 +196,15 @@ struct PlayerBehaviorSettingsView: View {
             Section("Playback feel") {
                 Toggle("Skip silence", isOn: Binding(
                     get: { prefs.skipSilenceEnabled },
-                    set: { prefs.skipSilenceEnabled = $0 }
+                    set: { prefs.skipSilenceEnabled = $0; FlowAVPlayer.shared.applyAudioPreferences() }
+                ))
+                Toggle("Stable volume", isOn: Binding(
+                    get: { prefs.stableVolumeEnabled },
+                    set: { prefs.stableVolumeEnabled = $0; FlowAVPlayer.shared.applyAudioPreferences() }
+                ))
+                Toggle("Lock button on player", isOn: Binding(
+                    get: { prefs.overlayLockModeEnabled },
+                    set: { prefs.overlayLockModeEnabled = $0 }
                 ))
                 Toggle("Remember playback speed", isOn: Binding(
                     get: { prefs.rememberPlaybackSpeed },

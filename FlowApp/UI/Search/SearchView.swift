@@ -11,15 +11,25 @@ struct SearchView: View {
     @State private var error:       Error?
     @State private var isFocused    = false
     @State private var searchHistory: [String] = []
+    @State private var filters = SearchFilter()
+    @State private var showFilterSheet = false
 
     private let client = InnerTubeClient.shared
     private let historyKey = "search_history"
+
+    private var filteredResults: [SearchResultItem] {
+        filters.apply(results)
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 searchBar
                     .padding(FlowTheme.Spacing.md)
+
+                if !results.isEmpty || !filters.isDefault {
+                    filterChipBar
+                }
 
                 if query.isEmpty && results.isEmpty {
                     suggestionsOrEmpty
@@ -37,7 +47,33 @@ struct SearchView: View {
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showFilterSheet = true } label: {
+                        Image(systemName: filters.isDefault ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                            .foregroundStyle(filters.isDefault ? FlowTheme.Colors.onSurface : FlowTheme.Colors.primary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showFilterSheet) {
+                SearchFilterSheet(filters: $filters)
+                    .presentationDetents([.medium])
+            }
             .onAppear { reloadSearchHistory() }
+        }
+    }
+
+    private var filterChipBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: FlowTheme.Spacing.sm) {
+                ForEach(SearchFilter.ContentType.allCases) { type in
+                    FlowChip(label: type.label, isSelected: filters.contentType == type) {
+                        filters.contentType = type
+                    }
+                }
+            }
+            .padding(.horizontal, FlowTheme.Spacing.md)
+            .padding(.bottom, FlowTheme.Spacing.sm)
         }
     }
 
@@ -136,8 +172,16 @@ struct SearchView: View {
     private var resultsList: some View {
         ScrollView {
             LazyVStack(spacing: FlowTheme.Spacing.sm) {
-                ForEach(results) { item in
-                    searchResultRow(item)
+                if filteredResults.isEmpty {
+                    Text("No results match these filters")
+                        .font(FlowTheme.Typography.bodyMedium)
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, FlowTheme.Spacing.xl)
+                } else {
+                    ForEach(filteredResults) { item in
+                        searchResultRow(item)
+                    }
                 }
             }
             .padding(FlowTheme.Spacing.md)
@@ -303,6 +347,89 @@ struct PlaylistRow: View {
                 }
             }
             Spacer()
+        }
+    }
+}
+
+// MARK: - SearchFilterSheet
+struct SearchFilterSheet: View {
+    @Binding var filters: SearchFilter
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Type") {
+                    ForEach(SearchFilter.ContentType.allCases) { type in
+                        Button {
+                            filters.contentType = type
+                        } label: {
+                            HStack {
+                                Text(type.label).foregroundStyle(FlowTheme.Colors.onSurface)
+                                Spacer()
+                                if filters.contentType == type {
+                                    Image(systemName: "checkmark").foregroundStyle(FlowTheme.Colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Duration") {
+                    ForEach(SearchFilter.Duration.allCases) { d in
+                        Button {
+                            filters.duration = d
+                        } label: {
+                            HStack {
+                                Text(d.label).foregroundStyle(FlowTheme.Colors.onSurface)
+                                Spacer()
+                                if filters.duration == d {
+                                    Image(systemName: "checkmark").foregroundStyle(FlowTheme.Colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Upload date") {
+                    ForEach(SearchFilter.UploadDate.allCases) { d in
+                        Button {
+                            filters.uploadDate = d
+                        } label: {
+                            HStack {
+                                Text(d.label).foregroundStyle(FlowTheme.Colors.onSurface)
+                                Spacer()
+                                if filters.uploadDate == d {
+                                    Image(systemName: "checkmark").foregroundStyle(FlowTheme.Colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Sort by") {
+                    ForEach(SearchFilter.Sort.allCases) { s in
+                        Button {
+                            filters.sort = s
+                        } label: {
+                            HStack {
+                                Text(s.label).foregroundStyle(FlowTheme.Colors.onSurface)
+                                Spacer()
+                                if filters.sort == s {
+                                    Image(systemName: "checkmark").foregroundStyle(FlowTheme.Colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Reset") { filters = SearchFilter() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

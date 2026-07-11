@@ -45,11 +45,14 @@ final class FlowAVPlayer: NSObject {
     private var pipController: AVPictureInPictureController?
     /// True after we already fell back from DASH to mux for the current video.
     private var usedMuxFallback = false
+    private var lastSilenceCheck: TimeInterval = 0
+    private var lowEnergyStreak = 0
 
     private override init() {
         super.init()
         let prefs = PlayerPreferences.shared
         playbackRate = prefs.rememberPlaybackSpeed ? prefs.playbackSpeed : 1.0
+        applyAudioPreferences()
         setupTimeObserver()
         setupRemoteCommandCenter()
         SleepTimerManager.shared.attach { [weak self] in self?.pause() }
@@ -59,6 +62,15 @@ final class FlowAVPlayer: NSObject {
             name: .AVPlayerItemDidPlayToEndTime,
             object: nil
         )
+    }
+
+    /// Apply skip-silence / stable-volume prefs (Android AudioFeaturesManager parity, best-effort).
+    func applyAudioPreferences() {
+        let prefs = PlayerPreferences.shared
+        if prefs.stableVolumeEnabled {
+            player.volume = 1.0
+            normalVolume = 1.0
+        }
     }
 
     // MARK: - Load & play
@@ -357,11 +369,39 @@ final class FlowAVPlayer: NSObject {
             let secs = time.seconds
             self.currentTime = secs
             self.checkSponsorSkip(at: secs)
+            self.checkSkipSilence(at: secs)
             self.recordWatchProgressIfNeeded()
             if let item = self.player.currentItem {
                 let loaded = item.loadedTimeRanges.first?.timeRangeValue
                 let bufferedEnd = (loaded?.start.seconds ?? 0) + (loaded?.duration.seconds ?? 0)
                 self.bufferProgress = self.duration > 0 ? bufferedEnd / self.duration : 0
+            }
+        }
+    }
+
+    /// Best-effort silence skip: if playhead stalls with buffer ahead, jump forward (Android ExoPlayer skipSilence analogue).
+    private func checkSkipSilence(at time: Double) {
+        guard PlayerPreferences.shared.skipSilenceEnabled, isPlaying, duration > 0 else {
+            lowEnergyStreak = 0
+            return
+        }
+        guard time - lastSilenceCheck >= 0.8 else { return }
+        lastSilenceCheck = time
+        guard let item = player.currentItem else { return }
+        let likely = item.isPlaybackLikelyToKeepUp
+        let waiting = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        if waiting && likely {
+            lowEnergyStreak += 1
+        } else if abs(player.rate) < 0.05 && isPlaying {
+            lowEnergyStreak += 1
+        } else {
+            lowEnergyStreak = 0
+        }
+        if lowEnergyStreak >= 2 {
+            lowEnergyStreak = 0
+            let jump = min(time + 1.5, duration - 0.25)
+            if jump > time + 0.4 {
+                seek(to: jump)
             }
         }
     }

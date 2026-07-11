@@ -457,8 +457,9 @@ struct PlayerAppearanceSettingsView: View {
             Toggle("Auto PiP", isOn: Binding(get: { prefs.autoPipEnabled }, set: { prefs.autoPipEnabled = $0 }))
             Toggle("Background play", isOn: Binding(get: { prefs.backgroundPlayEnabled }, set: { prefs.backgroundPlayEnabled = $0 }))
             Toggle("Loop videos", isOn: Binding(get: { prefs.videoLoopEnabled }, set: { prefs.videoLoopEnabled = $0 }))
-            Toggle("Skip silence", isOn: Binding(get: { prefs.skipSilenceEnabled }, set: { prefs.skipSilenceEnabled = $0 }))
-            Toggle("Stable volume", isOn: Binding(get: { prefs.stableVolumeEnabled }, set: { prefs.stableVolumeEnabled = $0 }))
+            Toggle("Skip silence", isOn: Binding(get: { prefs.skipSilenceEnabled }, set: { prefs.skipSilenceEnabled = $0; FlowAVPlayer.shared.applyAudioPreferences() }))
+            Toggle("Stable volume", isOn: Binding(get: { prefs.stableVolumeEnabled }, set: { prefs.stableVolumeEnabled = $0; FlowAVPlayer.shared.applyAudioPreferences() }))
+            Toggle("Lock button on player", isOn: Binding(get: { prefs.overlayLockModeEnabled }, set: { prefs.overlayLockModeEnabled = $0 }))
         }
         .scrollContentBackground(.hidden).background(FlowTheme.Colors.background)
         .navigationTitle("Player Appearance")

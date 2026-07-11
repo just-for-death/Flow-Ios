@@ -93,6 +93,38 @@ final class SubscriptionStore {
         save()
     }
 
+    private(set) var selectedGroupName: String? = UserDefaults.standard.string(forKey: "selected_subscription_group")
+
+    func selectGroup(_ name: String?) {
+        selectedGroupName = name
+        UserDefaults.standard.set(name, forKey: "selected_subscription_group")
+    }
+
+    func updateGroup(named name: String, newName: String, channelIDs: [String]) {
+        guard let idx = groups.firstIndex(where: { $0.name == name }) else { return }
+        var g = groups[idx]
+        g.name = newName.isEmpty ? name : newName
+        g.channelIDs = channelIDs
+        groups[idx] = g
+        if selectedGroupName == name { selectGroup(g.name) }
+        save()
+    }
+
+    func deleteGroup(named name: String) {
+        groups.removeAll { $0.name == name }
+        if selectedGroupName == name { selectGroup(nil) }
+        save()
+    }
+
+    var displayedFeedVideos: [VideoItem] {
+        guard let name = selectedGroupName,
+              let group = groups.first(where: { $0.name == name }) else {
+            return feedVideos
+        }
+        let ids = Set(group.channelIDs)
+        return feedVideos.filter { ids.contains($0.channelID) }
+    }
+
     // MARK: - RSS feed refresh
     func refreshFeed() async {
         guard !channels.isEmpty else { feedVideos = []; return }

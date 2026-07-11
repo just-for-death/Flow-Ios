@@ -24,6 +24,9 @@ struct VideoPlayerView: View {
     @State private var showQueue = false
     @State private var isLiked = false
     @State private var showSavePlaylist = false
+    @State private var isTouchLocked = false
+    @State private var showSbSubmit = false
+    @State private var expandedReplies: Set<String> = []
     @GestureState private var dragOffset = CGSize.zero
 
     var body: some View {
@@ -82,6 +85,18 @@ struct VideoPlayerView: View {
                         .presentationDetents([.medium, .large])
                 }
             }
+            .sheet(isPresented: $showSbSubmit) {
+                SponsorBlockSubmitSheet(
+                    videoID: player.currentVideo?.id ?? "",
+                    currentTime: player.currentTime,
+                    duration: player.duration
+                )
+                .presentationDetents([.medium])
+            }
+            .onChange(of: player.currentVideo?.id) { _, _ in
+                isTouchLocked = false
+                expandedReplies = []
+            }
         }
     }
 
@@ -89,15 +104,42 @@ struct VideoPlayerView: View {
         PlayerSurface()
             .aspectRatio(16/9, contentMode: .fit)
             .background(Color.black)
-            .overlay(PlayerGestureOverlay())
+            .overlay { if !isTouchLocked { PlayerGestureOverlay() } }
             .overlay(controlsOverlay)
-            .onTapGesture { toggleControls() }
+            .overlay { if isTouchLocked { touchLockOverlay } }
+            .onTapGesture {
+                if isTouchLocked { return }
+                toggleControls()
+            }
             .gesture(
                 DragGesture()
                     .onEnded { val in
+                        guard !isTouchLocked else { return }
                         if val.translation.height > 100 { onDismiss() }
                     }
             )
+    }
+
+    private var touchLockOverlay: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture { /* swallow taps while locked */ }
+            Button {
+                isTouchLocked = false
+                showControls = true
+                resetHideTimer()
+            } label: {
+                Image(systemName: "lock.open.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(.black.opacity(0.55))
+                    .clipShape(Circle())
+            }
+            .padding(FlowTheme.Spacing.md)
+            .accessibilityLabel("Unlock controls")
+        }
     }
 
     private var bottomPanel: some View {
@@ -158,6 +200,18 @@ struct VideoPlayerView: View {
                         Button { showQueue = true } label: {
                             Image(systemName: "list.bullet")
                                 .foregroundStyle(.white).frame(width: 44, height: 44)
+                        }
+                        if PlayerPreferences.shared.overlayLockModeEnabled {
+                            Button { isTouchLocked = true; showControls = false } label: {
+                                Image(systemName: "lock")
+                                    .foregroundStyle(.white).frame(width: 44, height: 44)
+                            }
+                        }
+                        if PlayerPreferences.shared.sbSubmitEnabled {
+                            Button { showSbSubmit = true } label: {
+                                Image(systemName: "plus.rectangle.on.rectangle")
+                                    .foregroundStyle(.white).frame(width: 44, height: 44)
+                            }
                         }
                     }
                     .padding(.horizontal, FlowTheme.Spacing.sm)
@@ -385,28 +439,99 @@ struct VideoPlayerView: View {
                         .font(FlowTheme.Typography.bodySmall)
                         .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                 } else {
-                    ForEach(comments.prefix(20)) { comment in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(comment.author)
-                                    .font(FlowTheme.Typography.labelLarge)
-                                    .foregroundStyle(FlowTheme.Colors.onSurface)
-                                Spacer()
-                                if !comment.likeCount.isEmpty {
-                                    Text(comment.likeCount)
-                                        .font(FlowTheme.Typography.labelSmall)
-                                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                                }
-                            }
-                            Text(comment.text)
-                                .font(FlowTheme.Typography.bodySmall)
-                                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                        }
-                        .padding(.vertical, FlowTheme.Spacing.xs)
+                    ForEach(Array(comments.prefix(20).enumerated()), id: \.element.id) { _, comment in
+                        commentRow(comment)
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func commentRow(_ comment: VideoComment) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(comment.author)
+                    .font(FlowTheme.Typography.labelLarge)
+                    .foregroundStyle(FlowTheme.Colors.onSurface)
+                Spacer()
+                if !comment.likeCount.isEmpty {
+                    Text(comment.likeCount)
+                        .font(FlowTheme.Typography.labelSmall)
+                        .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                }
+            }
+            Text(comment.text)
+                .font(FlowTheme.Typography.bodySmall)
+                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+
+            let canExpand = comment.replyCount > 0 || !comment.replies.isEmpty || comment.repliesContinuation != nil
+            if canExpand {
+                Button {
+                    Task { await toggleReplies(for: comment.id) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: expandedReplies.contains(comment.id) ? "chevron.up" : "chevron.down")
+                        Text(expandedReplies.contains(comment.id)
+                             ? "Hide replies"
+                             : (comment.replyCount > 0 ? "\(comment.replyCount) replies" : "View replies"))
+                            .font(FlowTheme.Typography.labelMedium)
+                    }
+                    .foregroundStyle(FlowTheme.Colors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if expandedReplies.contains(comment.id) {
+                ForEach(comment.replies) { reply in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reply.author)
+                            .font(FlowTheme.Typography.labelMedium)
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                        Text(reply.text)
+                            .font(FlowTheme.Typography.bodySmall)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                    }
+                    .padding(.leading, FlowTheme.Spacing.md)
+                    .padding(.vertical, 2)
+                }
+                if comment.repliesContinuation != nil {
+                    Button("Load more replies") {
+                        Task { await loadMoreReplies(for: comment.id) }
+                    }
+                    .font(FlowTheme.Typography.labelMedium)
+                    .foregroundStyle(FlowTheme.Colors.primary)
+                    .padding(.leading, FlowTheme.Spacing.md)
+                }
+            }
+        }
+        .padding(.vertical, FlowTheme.Spacing.xs)
+    }
+
+    private func toggleReplies(for commentID: String) async {
+        if expandedReplies.contains(commentID) {
+            expandedReplies.remove(commentID)
+            return
+        }
+        expandedReplies.insert(commentID)
+        guard let idx = comments.firstIndex(where: { $0.id == commentID }) else { return }
+        if comments[idx].replies.isEmpty, let cont = comments[idx].repliesContinuation {
+            await loadMoreReplies(for: commentID, continuation: cont)
+        }
+    }
+
+    private func loadMoreReplies(for commentID: String, continuation: String? = nil) async {
+        guard let videoID = player.currentVideo?.id,
+              let idx = comments.firstIndex(where: { $0.id == commentID }) else { return }
+        let token = continuation ?? comments[idx].repliesContinuation
+        guard let token else { return }
+        guard let result = try? await CommentsService.fetchReplies(videoID: videoID, continuation: token) else { return }
+        var updated = comments[idx]
+        let existing = Set(updated.replies.map(\.id))
+        updated.replies.append(contentsOf: result.replies.filter { !existing.contains($0.id) })
+        updated.repliesContinuation = result.next
+        updated.replyCount = max(updated.replyCount, updated.replies.count)
+        comments[idx] = updated
     }
 
     // MARK: - Related videos
@@ -473,6 +598,93 @@ struct VideoPlayerView: View {
         let (r, b) = await (ryd, branding)
         rydData         = r
         deArrowBranding = b
+    }
+}
+
+// MARK: - SponsorBlock submit (Android SbSubmitSegmentDialog)
+private struct SponsorBlockSubmitSheet: View {
+    let videoID: String
+    let currentTime: Double
+    let duration: Double
+    @Environment(\.dismiss) private var dismiss
+    @State private var startTime: Double
+    @State private var endTime: Double
+    @State private var category: SponsorCategory = .sponsor
+    @State private var status: String?
+    @State private var isSubmitting = false
+
+    init(videoID: String, currentTime: Double, duration: Double) {
+        self.videoID = videoID
+        self.currentTime = currentTime
+        self.duration = duration
+        _startTime = State(initialValue: max(0, currentTime - 5))
+        _endTime = State(initialValue: min(duration, currentTime + 5))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Segment") {
+                    HStack {
+                        Text("Start")
+                        Spacer()
+                        Text(startTime.timeFormatted)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        Button("Set") { startTime = currentTime }
+                            .foregroundStyle(FlowTheme.Colors.primary)
+                    }
+                    HStack {
+                        Text("End")
+                        Spacer()
+                        Text(endTime.timeFormatted)
+                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                        Button("Set") { endTime = currentTime }
+                            .foregroundStyle(FlowTheme.Colors.primary)
+                    }
+                }
+                Section("Category") {
+                    Picker("Category", selection: $category) {
+                        ForEach(SponsorCategory.allCases, id: \.self) { cat in
+                            Text(cat.displayName).tag(cat)
+                        }
+                    }
+                }
+                if let status {
+                    Section {
+                        Text(status)
+                            .foregroundStyle(status.contains("Submitted") ? FlowTheme.Colors.primary : FlowTheme.Colors.error)
+                    }
+                }
+            }
+            .navigationTitle("Submit segment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") {
+                        Task { await submit() }
+                    }
+                    .disabled(isSubmitting || videoID.isEmpty || endTime <= startTime)
+                }
+            }
+        }
+    }
+
+    private func submit() async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+        let ok = await SponsorBlockService.shared.submitSegment(
+            videoID: videoID,
+            startTime: startTime,
+            endTime: endTime,
+            category: category,
+            videoDuration: duration
+        )
+        status = ok ? "Submitted — thanks!" : "Submit failed. Try again later."
+        if ok {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            dismiss()
+        }
     }
 }
 

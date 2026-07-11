@@ -24,6 +24,7 @@ extension PlayerPreferences {
     var videoLoopEnabled: Bool { get { bool("video_loop_enabled", default: false) } set { set(newValue, "video_loop_enabled") } }
     var autoPipEnabled: Bool { get { bool("auto_pip_enabled", default: true) } set { set(newValue, "auto_pip_enabled") } }
     var rememberPlaybackSpeed: Bool { get { bool("remember_playback_speed", default: false) } set { set(newValue, "remember_playback_speed") } }
+    var overlayLockModeEnabled: Bool { get { bool("overlay_lock_mode_enabled", default: true) } set { set(newValue, "overlay_lock_mode_enabled") } }
 
     // Downloads
     var downloadThreads: Int { get { int("download_threads", default: 3) } set { set(newValue, "download_threads") } }
