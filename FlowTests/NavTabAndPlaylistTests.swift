@@ -77,9 +77,10 @@ final class FlowDatabasePlaylistTests: XCTestCase {
         let pl = db.createPlaylist(title: "Items")
         let item = CanonicalPlaylistItem(videoId: "abc", title: "Vid", hlc: "1")
         db.addToPlaylist(syncId: pl.syncId, item: item)
-        XCTAssertEqual(db.playlists[pl.syncId]?.items.count, 1)
+        XCTAssertEqual(db.playlists[pl.syncId]?.items.filter { !$0.deleted }.count, 1)
         db.removeFromPlaylist(syncId: pl.syncId, videoId: "abc")
-        XCTAssertEqual(db.playlists[pl.syncId]?.items.count, 0)
+        XCTAssertEqual(db.playlists[pl.syncId]?.items.filter { !$0.deleted }.count, 0)
+        XCTAssertEqual(db.playlists[pl.syncId]?.items.count, 1) // soft-deleted tombstone retained
         db.deletePlaylist(syncId: pl.syncId)
     }
 }

@@ -177,7 +177,8 @@ enum SyncCodec {
     static func readLongBE(_ data: Data, offset: Int) -> Int64 {
         let start = data.startIndex + offset
         let slice = data[start..<(start + 8)]
-        return slice.withUnsafeBytes { $0.load(as: Int64.self).bigEndian }
+        // Frame seq sits at offset 2 — not Int64-aligned; must use unaligned load.
+        return slice.withUnsafeBytes { $0.loadUnaligned(as: Int64.self).bigEndian }
     }
 }
 

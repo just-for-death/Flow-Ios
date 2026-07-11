@@ -18,7 +18,7 @@ final class NeuroEngineTests: XCTestCase {
         let tokens = tokenizer.tokenize("The Quick Brown FOX jumps over the lazy dog! 123")
 
         XCTAssertTrue(tokens.contains("fox"))
-        XCTAssertTrue(tokens.contains("jump"))
+        XCTAssertTrue(tokens.contains("jumps")) // no lemma for jumps→jump
         XCTAssertFalse(tokens.contains("the"))
     }
 

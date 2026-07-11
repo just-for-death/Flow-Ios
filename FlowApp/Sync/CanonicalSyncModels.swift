@@ -16,6 +16,55 @@ struct CanonicalWatchHistory: Codable {
     var isShort: Bool = false
     var hlc: String = ""
     var deleted: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case videoId, title, channelName, channelId, thumbnailUrl
+        case watchedAtMs, progress, durationSeconds, isMusic, isShort, hlc, deleted
+    }
+
+    init(
+        videoId: String,
+        title: String = "",
+        channelName: String = "",
+        channelId: String = "",
+        thumbnailUrl: String = "",
+        watchedAtMs: Int64 = 0,
+        progress: Double = 0,
+        durationSeconds: Int64 = 0,
+        isMusic: Bool = false,
+        isShort: Bool = false,
+        hlc: String = "",
+        deleted: Bool = false
+    ) {
+        self.videoId = videoId
+        self.title = title
+        self.channelName = channelName
+        self.channelId = channelId
+        self.thumbnailUrl = thumbnailUrl
+        self.watchedAtMs = watchedAtMs
+        self.progress = progress
+        self.durationSeconds = durationSeconds
+        self.isMusic = isMusic
+        self.isShort = isShort
+        self.hlc = hlc
+        self.deleted = deleted
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        videoId = try c.decode(String.self, forKey: .videoId)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        channelName = try c.decodeIfPresent(String.self, forKey: .channelName) ?? ""
+        channelId = try c.decodeIfPresent(String.self, forKey: .channelId) ?? ""
+        thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl) ?? ""
+        watchedAtMs = try c.decodeIfPresent(Int64.self, forKey: .watchedAtMs) ?? 0
+        progress = try c.decodeIfPresent(Double.self, forKey: .progress) ?? 0
+        durationSeconds = try c.decodeIfPresent(Int64.self, forKey: .durationSeconds) ?? 0
+        isMusic = try c.decodeIfPresent(Bool.self, forKey: .isMusic) ?? false
+        isShort = try c.decodeIfPresent(Bool.self, forKey: .isShort) ?? false
+        hlc = try c.decodeIfPresent(String.self, forKey: .hlc) ?? ""
+        deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
+    }
 }
 
 struct CanonicalSetting: Codable {
