@@ -134,6 +134,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             -resultBundlePath TestResults.xcresult
 
+      - name: Dump simulator crash logs
+        if: failure()
+        run: |
+          echo "== Recent DiagnosticReports =="
+          ls -lt ~/Library/Logs/DiagnosticReports 2>/dev/null | head -20 || true
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/Flow*.ips 2>/dev/null | head -3); do
+            echo "---- $f ----"
+            head -c 20000 "$f" || true
+          done
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/Flow*.crash 2>/dev/null | head -3); do
+            echo "---- $f ----"
+            head -c 20000 "$f" || true
+          done
+          echo "== simctl diagnose (tail) =="
+          xcrun simctl spawn "${{ steps.sim.outputs.id }}" log show --last 2m --predicate 'eventMessage CONTAINS "Flow" OR processImagePath CONTAINS "Flow"' 2>/dev/null | tail -80 || true
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5

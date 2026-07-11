@@ -1,28 +1,24 @@
 import SwiftUI
+import AVFoundation
 
 @main
 struct FlowApp: App {
 
-    // MARK: - Shared state
-    @State private var neuroEngine   = NeuroEngine.shared
-    @State private var player        = FlowAVPlayer.shared
-    @State private var appRouter     = AppRouter()
-    @State private var syncManager   = SyncManager.shared
-    @State private var themeManager  = ThemeManager.shared
-    @State private var navTabManager = NavTabManager.shared
-    @State private var flowDatabase  = FlowDatabase.shared
-
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    // MARK: - App appearance
+    private let runningTests: Bool
+
     init() {
-        // XCTest hosts the app process; keep launch minimal to avoid CI SIGTRAPs.
         let env = ProcessInfo.processInfo.environment
-        let runningTests = env["XCTestConfigurationFilePath"] != nil
+        runningTests = env["XCTestConfigurationFilePath"] != nil
             || env["XCTestSessionIdentifier"] != nil
             || env["XCTestBundlePath"] != nil
             || NSClassFromString("XCTestCase") != nil
+
+        // Keep the XCTest host process minimal — heavy singletons (AVPlayer,
+        // BG tasks, network monitors) have been aborting CI before bootstrap.
         guard !runningTests else { return }
+
         AudioSessionManager.configure()
         FlowCrashHandler.install()
         _ = NetworkPathMonitor.shared
@@ -38,23 +34,43 @@ struct FlowApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if appRouter.hasCompletedOnboarding {
-                    ContentView()
-                } else {
-                    OnboardingView {
-                        appRouter.hasCompletedOnboarding = true
-                    }
+            if runningTests {
+                Text("FlowTests")
+            } else {
+                FlowRootView()
+            }
+        }
+    }
+}
+
+// MARK: - FlowRootView
+/// Real app UI + shared state. Isolated so XCTest host launch does not construct it.
+private struct FlowRootView: View {
+    @State private var neuroEngine   = NeuroEngine.shared
+    @State private var player        = FlowAVPlayer.shared
+    @State private var appRouter     = AppRouter()
+    @State private var syncManager   = SyncManager.shared
+    @State private var themeManager  = ThemeManager.shared
+    @State private var navTabManager = NavTabManager.shared
+    @State private var flowDatabase  = FlowDatabase.shared
+
+    var body: some View {
+        Group {
+            if appRouter.hasCompletedOnboarding {
+                ContentView()
+            } else {
+                OnboardingView {
+                    appRouter.hasCompletedOnboarding = true
                 }
             }
-            .environment(neuroEngine)
-            .environment(player)
-            .environment(appRouter)
-            .environment(syncManager)
-            .environment(navTabManager)
-            .environment(flowDatabase)
-            .preferredColorScheme(themeManager.preferredColorScheme)
         }
+        .environment(neuroEngine)
+        .environment(player)
+        .environment(appRouter)
+        .environment(syncManager)
+        .environment(navTabManager)
+        .environment(flowDatabase)
+        .preferredColorScheme(themeManager.preferredColorScheme)
     }
 }
 
@@ -80,8 +96,6 @@ final class AppRouter {
         requestedTab = .shorts
     }
 }
-
-import AVFoundation
 
 // MARK: - AudioSessionManager
 enum AudioSessionManager {
@@ -110,6 +124,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
+        // Avoid constructing the player singleton during XCTest host launch.
+        let env = ProcessInfo.processInfo.environment
+        if env["XCTestConfigurationFilePath"] != nil { return }
+
         let player = FlowAVPlayer.shared
         let prefs = PlayerPreferences.shared
 
