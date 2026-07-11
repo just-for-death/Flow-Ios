@@ -66,17 +66,21 @@ jobs:
             exit 1
           fi
           echo "Using simulator $SIM_ID"
+          xcrun simctl boot "$SIM_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIM_ID" -b
           echo "id=$SIM_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run unit tests
         run: |
           set -o pipefail
+          # Allow ad-hoc simulator signing — CODE_SIGNING_ALLOWED=NO often SIGTRAPs the test host.
           xcodebuild test \
             -project Flow.xcodeproj \
             -scheme Flow \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.id }}" \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
             -resultBundlePath TestResults.xcresult
 
       - name: Upload test results

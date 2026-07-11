@@ -48,9 +48,10 @@ final class NeuroEngineTests: XCTestCase {
         let engine = NeuroEngine.shared
         await engine.initialize()
 
-        var seeded = UserBrain()
-        seeded.globalVector = ContentVector(topics: ["space": 1.0, "science": 0.9, "documentary": 0.7])
-        seeded.totalInteractions = 50
+        var seededMut = UserBrain()
+        seededMut.globalVector = ContentVector(topics: ["space": 1.0, "science": 0.9, "documentary": 0.7])
+        seededMut.totalInteractions = 50
+        let seeded = seededMut
         await MainActor.run { engine.replaceBrain(seeded) }
 
         let candidates = [

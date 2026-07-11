@@ -16,8 +16,11 @@ struct FlowApp: App {
 
     // MARK: - App appearance
     init() {
+        // XCTest hosts the app process; skip side effects that can SIGTRAP / hang CI.
+        let runningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         AudioSessionManager.configure()
         FlowCrashHandler.install()
+        guard !runningTests else { return }
         _ = NetworkPathMonitor.shared
         MediaCacheManager.applySettings()
         NotificationService.shared.registerBackgroundTasks()
