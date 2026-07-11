@@ -18,13 +18,10 @@ jobs:
   linux-logic:
     name: Linux logic checks
     runs-on: ubuntu-latest
+    container:
+      image: swift:6.0-jammy
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.0"
 
       - name: Run Linux feature suite
         run: bash scripts/test_on_linux.sh
@@ -36,6 +33,8 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
         run: brew install xcodegen
 
       - name: Generate Xcode project
@@ -50,31 +49,44 @@ jobs:
       - name: Build (Simulator)
         run: |
           set -o pipefail
+          DEST=$(xcodebuild -project Flow.xcodeproj -scheme Flow -showdestinations 2>/dev/null \
+            | grep -o 'platform:iOS Simulator[^,}]*name:[^,]*' \
+            | head -1 \
+            | sed 's/platform:\([^,]*\).*name:\([^,]*\)/platform=\1,name=\2/' \
+            || true)
+          if [[ -z "$DEST" ]]; then
+            DEST='generic/platform=iOS Simulator'
+          fi
+          echo "Using destination: $DEST"
           xcodebuild build \
             -project Flow.xcodeproj \
             -scheme Flow \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || xcodebuild build \
-            -project Flow.xcodeproj \
-            -scheme Flow \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "$DEST" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Unit tests
         run: |
           set -o pipefail
-          xcodebuild test \
-            -project Flow.xcodeproj \
-            -scheme Flow \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            || xcodebuild test \
-            -project Flow.xcodeproj \
-            -scheme Flow \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO
+          DEST=$(xcodebuild -project Flow.xcodeproj -scheme Flow -showdestinations 2>/dev/null \
+            | grep 'platform:iOS Simulator' \
+            | grep 'name:iPhone' \
+            | head -1 \
+            || true)
+          # Parse id=... from destination line if present
+          SIM_ID=$(echo "$DEST" | grep -o 'id:[A-F0-9-]*' | head -1 | cut -d: -f2 || true)
+          if [[ -n "$SIM_ID" ]]; then
+            xcodebuild test \
+              -project Flow.xcodeproj \
+              -scheme Flow \
+              -destination "platform=iOS Simulator,id=$SIM_ID" \
+              -configuration Debug \
+              CODE_SIGNING_ALLOWED=NO
+          else
+            xcodebuild test \
+              -project Flow.xcodeproj \
+              -scheme Flow \
+              -destination 'generic/platform=iOS Simulator' \
+              -configuration Debug \
+              CODE_SIGNING_ALLOWED=NO
+          fi

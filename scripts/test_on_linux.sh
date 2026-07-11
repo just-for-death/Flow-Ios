@@ -72,9 +72,20 @@ section "3/4  Feature inventory (what Linux can / cannot cover)"
 inventory_ok=0
 inventory_mac=0
 
+# Prefer ripgrep; fall back to grep -R (GitHub ubuntu runners often lack `rg`).
+search_source() {
+  local pattern="$1" path="$2"
+  if have rg; then
+    rg -q "$pattern" "$path" 2>/dev/null
+  else
+    # grep -E: treat | as alternation like rg
+    grep -REq "$pattern" "$path" 2>/dev/null
+  fi
+}
+
 check_source() {
   local label="$1" pattern="$2" where="$3"
-  if rg -q "$pattern" "$ROOT/$where" 2>/dev/null; then
+  if search_source "$pattern" "$ROOT/$where"; then
     printf "  ✓ %-42s  present in source\n" "$label"
     inventory_ok=$((inventory_ok + 1))
   else
@@ -162,7 +173,7 @@ if have ios; then
   echo
   cyan "go-ios detected — connected devices:"
   ios list 2>/dev/null || true
-elif lsusb 2>/dev/null | rg -qi 'apple|iphone'; then
+elif lsusb 2>/dev/null | grep -Eiq 'apple|iphone|ipad'; then
   echo
   cyan "Apple USB device seen — install go-ios to drive it from Linux"
 else
