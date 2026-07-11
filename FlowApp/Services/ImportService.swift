@@ -47,7 +47,7 @@ enum ImportService {
 
         var count = 0
         let dbQueue = try DatabaseQueue(path: tempURL.path)
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT s.url, h.access_date, COALESCE(ss.progress_time, 0) as progress,
                        COALESCE(s.duration, 0) as duration

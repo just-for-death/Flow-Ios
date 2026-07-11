@@ -4,18 +4,21 @@ import AVKit
 // MARK: - AirPlayRoutePicker
 /// UIViewRepresentable wrapper for AVRoutePickerView.
 struct AirPlayRoutePicker: UIViewRepresentable {
-    var tintColor: UIColor = .white
+    var tintColor: Color = .white
 
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView()
-        picker.tintColor = tintColor
-        picker.activeTintColor = tintColor
+        let ui = UIColor(tintColor)
+        picker.tintColor = ui
+        picker.activeTintColor = ui
         picker.prioritizesVideoDevices = true
         return picker
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
-        uiView.tintColor = tintColor
+        let ui = UIColor(tintColor)
+        uiView.tintColor = ui
+        uiView.activeTintColor = ui
     }
 }
 
