@@ -48,10 +48,10 @@ final class NeuroEngineTests: XCTestCase {
         let engine = NeuroEngine.shared
         await engine.initialize()
 
-        await MainActor.run {
-            engine.brain.globalVector = ContentVector(topics: ["space": 1.0, "science": 0.9, "documentary": 0.7])
-            engine.brain.totalInteractions = 50
-        }
+        var seeded = UserBrain()
+        seeded.globalVector = ContentVector(topics: ["space": 1.0, "science": 0.9, "documentary": 0.7])
+        seeded.totalInteractions = 50
+        await MainActor.run { engine.replaceBrain(seeded) }
 
         let candidates = [
             VideoItem(id: "a", title: "Another Space Video", channelName: "Science", channelID: "ch1",
@@ -60,7 +60,7 @@ final class NeuroEngineTests: XCTestCase {
                       thumbnailURL: nil, duration: 300, viewCount: nil, publishedAt: nil, isLive: false)
         ]
 
-        let ranked = engine.rank(candidates: candidates, userSubs: [])
+        let ranked = await MainActor.run { engine.rank(candidates: candidates, userSubs: []) }
         XCTAssertEqual(ranked.first?.id, "a")
     }
 }
