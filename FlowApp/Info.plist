@@ -70,6 +70,10 @@
     <string>Flow saves downloaded media to your photo library.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Flow uses your local network to discover devices for casting and device-to-device sync.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_flow-sync._tcp</string>
+    </array>
 
     <!-- Scene -->
     <key>UIApplicationSceneManifest</key>

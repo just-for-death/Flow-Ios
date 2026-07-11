@@ -16,11 +16,15 @@ struct FlowApp: App {
 
     // MARK: - App appearance
     init() {
-        // XCTest hosts the app process; skip side effects that can SIGTRAP / hang CI.
-        let runningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        // XCTest hosts the app process; keep launch minimal to avoid CI SIGTRAPs.
+        let env = ProcessInfo.processInfo.environment
+        let runningTests = env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+            || env["XCTestBundlePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+        guard !runningTests else { return }
         AudioSessionManager.configure()
         FlowCrashHandler.install()
-        guard !runningTests else { return }
         _ = NetworkPathMonitor.shared
         MediaCacheManager.applySettings()
         NotificationService.shared.registerBackgroundTasks()
