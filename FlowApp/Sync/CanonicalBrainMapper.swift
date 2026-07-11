@@ -221,7 +221,7 @@ enum CanonicalBrainMapper {
         return CanonicalBrain(
             schema: max(local.schema, remote.schema),
             deviceId: local.deviceId,
-            hlc: SyncHLC.max(local.hlc, remote.hlc),
+            hlc: SyncHLC.maxStamp(local.hlc, remote.hlc),
             vectors: mergeVectors(local.vectors, remote.vectors),
             idfTotalDocuments: local.idfTotalDocuments.merge(remote.idfTotalDocuments),
             totalInteractions: local.totalInteractions.merge(remote.totalInteractions),

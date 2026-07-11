@@ -55,7 +55,7 @@ enum SyncHLC {
         defer { lock.unlock() }
         let pt = Int64(Date().timeIntervalSince1970 * 1000)
         let prevPhysical = lastPhysical
-        lastPhysical = max(prevPhysical, pt)
+        lastPhysical = Swift.max(prevPhysical, pt)
         lastCounter = (lastPhysical == prevPhysical) ? lastCounter + 1 : 0
         return SyncHLCValue(physicalMs: lastPhysical, counter: lastCounter, node: node).encode()
     }
@@ -65,7 +65,7 @@ enum SyncHLC {
         SyncHLCValue.decode(lhs) > SyncHLCValue.decode(rhs)
     }
 
-    static func max(_ a: String, _ b: String) -> String {
+    static func maxStamp(_ a: String, _ b: String) -> String {
         isNewer(a, than: b) ? a : b
     }
 }

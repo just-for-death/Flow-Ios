@@ -101,7 +101,7 @@ final class SubscriptionStore {
 
         var all: [(video: VideoItem, date: Date)] = []
 
-        await withTaskGroup(of: [(VideoItem, Date)].self) { group in
+        await withTaskGroup(of: [(video: VideoItem, date: Date)].self) { group in
             for channel in channels.prefix(40) {
                 group.addTask {
                     await Self.fetchRSS(channelID: channel.channelID, channelName: channel.channelName)
@@ -116,7 +116,7 @@ final class SubscriptionStore {
 
     private func applyFeedFilters(_ items: [(video: VideoItem, date: Date)]) -> [VideoItem] {
         let prefs = PlayerPreferences.shared
-        var filtered: [(VideoItem, Date)] = items
+        var filtered = items
 
         filtered = filtered.filter { item in
             let isShort = item.video.isShortVideo
@@ -148,12 +148,12 @@ final class SubscriptionStore {
         return Array(filtered.prefix(500).map(\.video))
     }
 
-    private static func fetchRSS(channelID: String, channelName: String) async -> [(VideoItem, Date)] {
+    private static func fetchRSS(channelID: String, channelName: String) async -> [(video: VideoItem, date: Date)] {
         guard let url = URL(string: "https://www.youtube.com/feeds/videos.xml?channel_id=\(channelID)") else { return [] }
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               let xml = String(data: data, encoding: .utf8) else { return [] }
 
-        var results: [(VideoItem, Date)] = []
+        var results: [(video: VideoItem, date: Date)] = []
         let entries = xml.components(separatedBy: "<entry>")
         let formatter = ISO8601DateFormatter()
 
@@ -168,7 +168,7 @@ final class SubscriptionStore {
                 thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"),
                 duration: nil, viewCount: nil, publishedAt: nil, isLive: isLive
             )
-            results.append((video, published))
+            results.append((video: video, date: published))
         }
         return results
     }
