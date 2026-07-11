@@ -19,9 +19,10 @@ final class JSCipherNsigTests: XCTestCase {
     }
 
     func testTransformNWithSyntheticFunction() throws {
+        // Pattern lives in a comment so evaluateScript stays valid (real player.js embeds it in code).
         let js = """
         var ntr = function(a) { return a.split("").reverse().join("") + "x"; };
-        .get("n"))&&(b=ntr(c));
+        /* .get("n"))&&(b=ntr(c)); */
         """
         let out = try JSCipher.shared.transformN("abcde", jsSource: js)
         XCTAssertEqual(out, "edcbax")
