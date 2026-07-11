@@ -1,152 +1,383 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - OnboardingView
-/// 5-page onboarding that mirrors the Android app's 6-screen onboarding.
+/// Android-parity onboarding: Interests → Channels → Import.
 struct OnboardingView: View {
-
     let onComplete: () -> Void
-    @State private var page = 0
 
-    private let pages: [OnboardingPage] = [
-        OnboardingPage(
-            icon: "play.circle.fill",
-            title: "Welcome to Flow",
-            body: "A privacy-first YouTube client that learns your taste — no ads, no tracking, no account required.",
-            primaryColor: FlowTheme.Colors.primary
-        ),
-        OnboardingPage(
-            icon: "brain.head.profile",
-            title: "Flow Learns With You",
-            body: "FlowNeuro analyzes what you watch, skip, and like — entirely on your device. Your data never leaves your iPhone.",
-            primaryColor: FlowTheme.Colors.primary
-        ),
-        OnboardingPage(
-            icon: "shield.lefthalf.filled",
-            title: "SponsorBlock Built In",
-            body: "Automatically skips sponsor segments, self-promotion, and outros using the community-driven SponsorBlock database.",
-            primaryColor: FlowTheme.Colors.sponsorBlock
-        ),
-        OnboardingPage(
-            icon: "music.note.house.fill",
-            title: "Music Player Included",
-            body: "A dedicated audio player with synchronized lyrics, album art, background playback, and lock screen controls.",
-            primaryColor: FlowTheme.Colors.primary
-        ),
-        OnboardingPage(
-            icon: "lock.shield.fill",
-            title: "Fully Open Source",
-            body: "Flow is GPL v3 licensed. You can audit, modify, and build it yourself. No black boxes, no hidden analytics.",
-            primaryColor: FlowTheme.Colors.primary
-        )
-    ]
+    @Environment(NeuroEngine.self) private var neuro
+    @State private var step: Step = .interests
+    @State private var selectedTopics: Set<String> = []
+    @State private var channelQuery = ""
+    @State private var channelResults: [ChannelItem] = []
+    @State private var isSearchingChannels = false
+    @State private var subscribedIDs: Set<String> = []
+    @State private var importMessage: String?
+    @State private var isFinishing = false
+    @State private var searchTask: Task<Void, Never>?
+
+    private enum Step: Int, CaseIterable {
+        case interests, channels, importData
+        var title: String {
+            switch self {
+            case .interests: return "Interests"
+            case .channels: return "Channels"
+            case .importData: return "Import"
+            }
+        }
+    }
+
+    private var canAdvance: Bool {
+        switch step {
+        case .interests: return selectedTopics.count >= 3
+        case .channels, .importData: return true
+        }
+    }
 
     var body: some View {
         ZStack {
             FlowTheme.Colors.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Page content
-                TabView(selection: $page) {
-                    ForEach(pages.indices, id: \.self) { idx in
-                        OnboardingPageView(p: pages[idx])
-                            .tag(idx)
+                stepIndicator
+                    .padding(.horizontal, FlowTheme.Spacing.lg)
+                    .padding(.top, FlowTheme.Spacing.md)
+
+                Group {
+                    switch step {
+                    case .interests: interestsStep
+                    case .channels: channelsStep
+                    case .importData: importStep
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(FlowTheme.Animation.standard, value: page)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Dots + navigation
-                VStack(spacing: FlowTheme.Spacing.lg) {
-                    // Progress dots
-                    HStack(spacing: FlowTheme.Spacing.sm) {
-                        ForEach(pages.indices, id: \.self) { idx in
-                            Capsule()
-                                .fill(idx == page ? FlowTheme.Colors.primary : FlowTheme.Colors.outlineVariant)
-                                .frame(width: idx == page ? 24 : 8, height: 8)
-                                .animation(FlowTheme.Animation.standard, value: page)
+                bottomBar
+            }
+        }
+        .alert("Import", isPresented: .init(
+            get: { importMessage != nil },
+            set: { if !$0 { importMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importMessage ?? "")
+        }
+    }
+
+    // MARK: - Chrome
+
+    private var stepIndicator: some View {
+        VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+            Text(step.title)
+                .font(FlowTheme.Typography.headlineSmall)
+                .foregroundStyle(FlowTheme.Colors.onSurface)
+            HStack(spacing: 6) {
+                ForEach(Step.allCases, id: \.rawValue) { s in
+                    Capsule()
+                        .fill(s.rawValue <= step.rawValue ? FlowTheme.Colors.primary : FlowTheme.Colors.outlineVariant)
+                        .frame(height: 4)
+                }
+            }
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: FlowTheme.Spacing.md) {
+            if step != .interests {
+                Button("Back") {
+                    withAnimation { step = Step(rawValue: step.rawValue - 1) ?? .interests }
+                }
+                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+            }
+
+            Button("Skip") { advance(skipping: true) }
+                .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+
+            Spacer()
+
+            Button {
+                advance(skipping: false)
+            } label: {
+                Text(step == .importData ? "Get Started" : "Next")
+                    .font(FlowTheme.Typography.titleMedium)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, FlowTheme.Spacing.lg)
+                    .padding(.vertical, FlowTheme.Spacing.sm)
+                    .background(canAdvance && !isFinishing ? FlowTheme.Colors.primary : FlowTheme.Colors.outline)
+                    .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
+            }
+            .disabled(!canAdvance || isFinishing)
+        }
+        .padding(FlowTheme.Spacing.lg)
+    }
+
+    private func advance(skipping: Bool) {
+        if step == .importData {
+            finish()
+            return
+        }
+        if skipping || canAdvance {
+            if let next = Step(rawValue: step.rawValue + 1) {
+                withAnimation { step = next }
+            } else {
+                finish()
+            }
+        }
+    }
+
+    private func finish() {
+        isFinishing = true
+        neuro.completeOnboarding(selectedTopics: selectedTopics)
+        onComplete()
+    }
+
+    // MARK: - Interests
+
+    private var interestsStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FlowTheme.Spacing.lg) {
+                Text(selectedTopics.count >= 3
+                     ? "Looking good — pick more if you want."
+                     : "Pick at least \(3 - selectedTopics.count) more interest\(3 - selectedTopics.count == 1 ? "" : "s").")
+                    .font(FlowTheme.Typography.bodyMedium)
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+
+                ForEach(NeuroTopicCatalog.categories) { category in
+                    VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
+                        Label(category.name, systemImage: category.systemImage)
+                            .font(FlowTheme.Typography.titleSmall)
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                        FlowWrappingHStack(spacing: 8) {
+                            ForEach(category.topics, id: \.self) { topic in
+                                topicChip(topic)
+                            }
                         }
-                    }
-
-                    // CTA button
-                    Button {
-                        if page < pages.count - 1 {
-                            withAnimation(FlowTheme.Animation.standard) { page += 1 }
-                        } else {
-                            onComplete()
-                        }
-                    } label: {
-                        Text(page < pages.count - 1 ? "Continue" : "Get Started")
-                            .font(FlowTheme.Typography.titleMedium)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(FlowTheme.Spacing.md)
-                            .background(FlowTheme.Colors.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.lg))
-                    }
-                    .padding(.horizontal, FlowTheme.Spacing.xl)
-
-                    if page < pages.count - 1 {
-                        Button("Skip") { onComplete() }
-                            .font(FlowTheme.Typography.bodyMedium)
-                            .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
                     }
                 }
-                .padding(.bottom, FlowTheme.Spacing.xxl)
+            }
+            .padding(FlowTheme.Spacing.lg)
+        }
+    }
+
+    private func topicChip(_ topic: String) -> some View {
+        let selected = selectedTopics.contains(topic)
+        return Button {
+            if selected { selectedTopics.remove(topic) } else { selectedTopics.insert(topic) }
+        } label: {
+            Text(topic)
+                .font(FlowTheme.Typography.labelLarge)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(selected ? FlowTheme.Colors.primary : FlowTheme.Colors.surfaceVariant)
+                .foregroundStyle(selected ? Color.white : FlowTheme.Colors.onSurface)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Channels
+
+    private var channelsStep: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                TextField("Search channels", text: $channelQuery)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: channelQuery) { _, value in
+                        scheduleChannelSearch(value)
+                    }
+            }
+            .padding(FlowTheme.Spacing.md)
+            .background(FlowTheme.Colors.surfaceVariant)
+            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+            .padding(FlowTheme.Spacing.lg)
+
+            if isSearchingChannels {
+                ProgressView().padding()
+            }
+
+            List {
+                ForEach(channelResults) { channel in
+                    HStack(spacing: FlowTheme.Spacing.md) {
+                        AsyncImage(url: channel.avatarURL) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle().fill(FlowTheme.Colors.outline)
+                        }
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(channel.name)
+                                .font(FlowTheme.Typography.bodyLarge)
+                                .foregroundStyle(FlowTheme.Colors.onSurface)
+                            if let subs = channel.subscriberCount {
+                                Text(subs)
+                                    .font(FlowTheme.Typography.bodySmall)
+                                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+                            }
+                        }
+                        Spacer()
+                        Button(subscribedIDs.contains(channel.id) ? "Subscribed" : "Subscribe") {
+                            toggleSubscribe(channel)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(subscribedIDs.contains(channel.id) ? FlowTheme.Colors.outline : FlowTheme.Colors.primary)
+                        .disabled(subscribedIDs.contains(channel.id))
+                    }
+                    .listRowBackground(FlowTheme.Colors.surfaceVariant)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+        }
+    }
+
+    private func scheduleChannelSearch(_ query: String) {
+        searchTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            channelResults = []
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { isSearchingChannels = true }
+            defer { Task { @MainActor in isSearchingChannels = false } }
+            guard let page = try? await InnerTubeClient.shared.search(query: trimmed) else { return }
+            let channels = page.results.compactMap { item -> ChannelItem? in
+                if case .channel(let c) = item { return c }
+                return nil
+            }
+            await MainActor.run { channelResults = Array(channels.prefix(15)) }
+        }
+    }
+
+    private func toggleSubscribe(_ channel: ChannelItem) {
+        guard !subscribedIDs.contains(channel.id) else { return }
+        let sub = ChannelSubscription(
+            channelID: channel.id,
+            channelName: channel.name,
+            channelThumbnail: channel.avatarURL?.absoluteString ?? ""
+        )
+        SubscriptionStore.shared.subscribe(sub)
+        subscribedIDs.insert(channel.id)
+    }
+
+    // MARK: - Import
+
+    private var importStep: some View {
+        List {
+            Section("Backup & Restore") {
+                importRow("Flow Backup", types: [.json]) { url in
+                    let result = try await ImportService.importFlowBackupJSON(from: url)
+                    return "Imported \(result.subscriptions) subs, \(result.history) history"
+                }
+                importRow("Master Backup", types: [.json, .zip]) { url in
+                    let result = try await ImportService.importFlowMasterJSON(from: url)
+                    return "Imported master backup (\(result.subscriptions) subs)"
+                }
+            }
+            Section("Subscriptions") {
+                importRow("NewPipe subscriptions", types: [.json]) { url in
+                    let n = try await ImportService.importSubscriptionsJSON(from: url)
+                    return "Imported \(n) subscriptions"
+                }
+            }
+            Section("History") {
+                importRow("NewPipe history", types: [.data, .zip]) { url in
+                    let n = try await ImportService.importWatchHistoryDatabase(from: url)
+                    return "Imported \(n) history items"
+                }
+            }
+            Section {
+                Text("You can import more formats later in Settings. Skip if you want a fresh start.")
+                    .font(FlowTheme.Typography.bodySmall)
+                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
+            }
+        }
+        .scrollContentBackground(.hidden)
+    }
+
+    private func importRow(
+        _ title: String,
+        types: [UTType],
+        handler: @escaping (URL) async throws -> String
+    ) -> some View {
+        ImportPickerButton(title: title, types: types) { url in
+            do {
+                let msg = try await handler(url)
+                await MainActor.run { importMessage = msg }
+            } catch {
+                await MainActor.run { importMessage = error.localizedDescription }
             }
         }
     }
 }
 
-// MARK: - Page model
-struct OnboardingPage {
-    let icon:         String
-    let title:        String
-    let body:         String
-    let primaryColor: Color
-}
+// MARK: - Import picker button
+private struct ImportPickerButton: View {
+    let title: String
+    let types: [UTType]
+    let handler: (URL) async -> Void
 
-// MARK: - Individual page view
-struct OnboardingPageView: View {
-    let p: OnboardingPage
-    @State private var appeared = false
+    @State private var showPicker = false
 
     var body: some View {
-        VStack(spacing: FlowTheme.Spacing.xl) {
-            Spacer()
-
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(p.primaryColor.opacity(0.12))
-                    .frame(width: 140, height: 140)
-                Image(systemName: p.icon)
-                    .font(.system(size: 68))
-                    .foregroundStyle(p.primaryColor)
+        Button(title) { showPicker = true }
+            .foregroundStyle(FlowTheme.Colors.primary)
+            .fileImporter(isPresented: $showPicker, allowedContentTypes: types) { result in
+                guard case .success(let url) = result else { return }
+                let access = url.startAccessingSecurityScopedResource()
+                Task {
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    await handler(url)
+                }
             }
-            .scaleEffect(appeared ? 1 : 0.6)
-            .opacity(appeared ? 1 : 0)
+    }
+}
 
-            // Text
-            VStack(spacing: FlowTheme.Spacing.sm) {
-                Text(p.title)
-                    .font(FlowTheme.Typography.headlineMedium)
-                    .foregroundStyle(FlowTheme.Colors.onSurface)
-                    .multilineTextAlignment(.center)
+// MARK: - Simple wrapping layout
+struct FlowWrappingHStack: Layout {
+    var spacing: CGFloat = 8
 
-                Text(p.body)
-                    .font(FlowTheme.Typography.bodyLarge)
-                    .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, FlowTheme.Spacing.xl)
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        layout(in: proposal.width ?? 0, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(in: bounds.width, subviews: subviews)
+        for (index, origin) in result.origins.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func layout(in width: CGFloat, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxWidth: CGFloat = 0
+        for sub in subviews {
+            let size = sub.sizeThatFits(.unspecified)
+            if x + size.width > width, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
             }
-            .offset(y: appeared ? 0 : 20)
-            .opacity(appeared ? 1 : 0)
-
-            Spacer()
+            origins.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+            maxWidth = max(maxWidth, x)
         }
-        .onAppear {
-            withAnimation(FlowTheme.Animation.emphasize.delay(0.1)) { appeared = true }
-        }
-        .onDisappear { appeared = false }
+        return (CGSize(width: maxWidth, height: y + rowHeight), origins)
     }
 }

@@ -432,6 +432,20 @@ final class NeuroEngine {
         scheduleDebouncedSave()
     }
 
+    func removePreferredTopic(_ topic: String) {
+        let norm = topic.trimmingCharacters(in: .whitespaces)
+        brain.preferredTopics.remove(norm)
+        brain.preferredTopics.remove(norm.lowercased())
+        brain.globalVector.topics.removeValue(forKey: tokenizer.normalizeLemma(norm))
+        scheduleDebouncedSave()
+    }
+
+    func removeBlockedTopic(_ topic: String) {
+        let norm = topic.trimmingCharacters(in: .whitespaces).lowercased()
+        brain.blockedTopics.remove(norm)
+        scheduleDebouncedSave()
+    }
+
     // MARK: - Persona
     func currentPersona() -> FlowPersona {
         let b = brain

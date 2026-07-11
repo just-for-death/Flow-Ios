@@ -38,6 +38,17 @@ struct InnerTubeContext: Encodable {
         var cronetVersion: String?
     }
 
+    static func webRemix(visitorData: String? = nil) -> InnerTubeContext {
+        InnerTubeContext(client: Client(
+            clientName: "WEB_REMIX",
+            clientVersion: "1.20260213.01.00",
+            hl: preferredHL,
+            gl: preferredGL,
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+            visitorData: visitorData
+        ))
+    }
+
     static func web(visitorData: String? = nil, hl: String? = nil, gl: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "WEB",
@@ -356,6 +367,20 @@ final class InnerTubeClient {
         ]
         if let p = params { body["params"] = p }
         return try await post(to: InnerTubeEndpoints.browse(), body: body)
+    }
+
+    /// YouTube Music home / charts / explore (WEB_REMIX client).
+    func browseMusic(browseID: String = "FEmusic_home", params: String? = nil) async throws -> Data {
+        var body: [String: Any] = [
+            "context": encodeContext(.webRemix(visitorData: sanitizedVisitorData)),
+            "browseId": browseID
+        ]
+        if let params { body["params"] = params }
+        return try await post(
+            to: InnerTubeEndpoints.browse(),
+            body: body,
+            userAgent: InnerTubeContext.webRemix().client.userAgent
+        )
     }
 
     // MARK: - Private helpers

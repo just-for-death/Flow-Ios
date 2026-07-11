@@ -210,6 +210,12 @@ struct HomeFeedPage {
                let item = VideoItem(compactVideoRenderer: cvr) {
                 items.append(item)
             }
+            if let musicItem = VideoItem(musicResponsiveListItem: dict["musicResponsiveListItemRenderer"] as? [String: Any]) {
+                items.append(musicItem)
+            }
+            if let musicTwoRow = VideoItem(musicTwoRowItem: dict["musicTwoRowItemRenderer"] as? [String: Any]) {
+                items.append(musicTwoRow)
+            }
             for value in dict.values {
                 extractVideos(from: value, into: &items)
             }
@@ -218,6 +224,60 @@ struct HomeFeedPage {
                 extractVideos(from: value, into: &items)
             }
         }
+    }
+
+    /// Named shelves for YouTube Music home (carousel / rich shelves).
+    static func extractMusicSections(from data: Data) -> [(title: String, videos: [VideoItem])] {
+        guard let raw = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        var sections: [(String, [VideoItem])] = []
+        walkMusicShelves(raw) { title, node in
+            var videos: [VideoItem] = []
+            extractVideos(from: node, into: &videos)
+            var seen = Set<String>()
+            videos = videos.filter { seen.insert($0.id).inserted }
+            if !videos.isEmpty {
+                sections.append((title.isEmpty ? "For you" : title, videos))
+            }
+        }
+        return sections
+    }
+
+    private static func walkMusicShelves(_ any: Any, visit: (String, Any) -> Void) {
+        guard let dict = any as? [String: Any] else {
+            if let array = any as? [Any] {
+                array.forEach { walkMusicShelves($0, visit: visit) }
+            }
+            return
+        }
+        let shelfKeys = ["musicCarouselShelfRenderer", "richShelfRenderer", "shelfRenderer"]
+        for key in shelfKeys {
+            if let shelf = dict[key] as? [String: Any] {
+                visit(shelfTitle(shelf), shelf)
+            }
+        }
+        for value in dict.values {
+            walkMusicShelves(value, visit: visit)
+        }
+    }
+
+    private static func shelfTitle(_ shelf: [String: Any]) -> String {
+        if let header = shelf["header"] as? [String: Any] {
+            if let musicHeader = header["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any],
+               let title = musicHeader["title"] as? [String: Any],
+               let runs = title["runs"] as? [[String: Any]] {
+                return runs.compactMap { $0["text"] as? String }.joined()
+            }
+            if let rich = header["richShelfHeaderRenderer"] as? [String: Any],
+               let title = rich["title"] as? [String: Any],
+               let runs = title["runs"] as? [[String: Any]] {
+                return runs.compactMap { $0["text"] as? String }.joined()
+            }
+        }
+        if let title = shelf["title"] as? [String: Any],
+           let runs = title["runs"] as? [[String: Any]] {
+            return runs.compactMap { $0["text"] as? String }.joined()
+        }
+        return ""
     }
 
     private static func findContinuation(in any: Any) -> String? {
@@ -608,6 +668,102 @@ extension ChannelItem {
         }
         
         self.verified = false
+    }
+}
+
+extension VideoItem {
+    init?(musicResponsiveListItem renderer: [String: Any]?) {
+        guard let renderer else { return nil }
+        guard let videoID = Self.watchVideoID(in: renderer) else { return nil }
+        let columns = renderer["flexColumns"] as? [[String: Any]] ?? []
+        var texts: [String] = []
+        for col in columns {
+            guard let flex = col["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+                  let text = flex["text"] as? [String: Any],
+                  let runs = text["runs"] as? [[String: Any]] else { continue }
+            let joined = runs.compactMap { $0["text"] as? String }.joined()
+            if !joined.isEmpty { texts.append(joined) }
+        }
+        let title = texts.first ?? "Track"
+        let artist = texts.count > 1 ? texts[1] : ""
+        var thumb: URL?
+        if let thumbObj = renderer["thumbnail"] as? [String: Any],
+           let musicThumb = thumbObj["musicThumbnailRenderer"] as? [String: Any],
+           let thumbDict = musicThumb["thumbnail"] as? [String: Any],
+           let thumbs = thumbDict["thumbnails"] as? [[String: Any]],
+           let url = thumbs.last?["url"] as? String {
+            thumb = URL(string: url)
+        }
+        self.init(
+            id: videoID,
+            title: title,
+            channelName: artist,
+            channelID: "",
+            thumbnailURL: thumb,
+            duration: nil,
+            viewCount: nil,
+            publishedAt: nil,
+            isLive: false
+        )
+    }
+
+    init?(musicTwoRowItem renderer: [String: Any]?) {
+        guard let renderer else { return nil }
+        guard let videoID = Self.watchVideoID(in: renderer) else { return nil }
+        let title: String
+        if let t = renderer["title"] as? [String: Any],
+           let runs = t["runs"] as? [[String: Any]] {
+            title = runs.compactMap { $0["text"] as? String }.joined()
+        } else {
+            title = "Track"
+        }
+        let subtitle: String
+        if let t = renderer["subtitle"] as? [String: Any],
+           let runs = t["runs"] as? [[String: Any]] {
+            subtitle = runs.compactMap { $0["text"] as? String }.joined()
+        } else {
+            subtitle = ""
+        }
+        var thumb: URL?
+        if let thumbObj = renderer["thumbnailRenderer"] as? [String: Any],
+           let musicThumb = thumbObj["musicThumbnailRenderer"] as? [String: Any],
+           let thumbDict = musicThumb["thumbnail"] as? [String: Any],
+           let thumbs = thumbDict["thumbnails"] as? [[String: Any]],
+           let url = thumbs.last?["url"] as? String {
+            thumb = URL(string: url)
+        }
+        self.init(
+            id: videoID,
+            title: title,
+            channelName: subtitle,
+            channelID: "",
+            thumbnailURL: thumb,
+            duration: nil,
+            viewCount: nil,
+            publishedAt: nil,
+            isLive: false
+        )
+    }
+
+    private static func watchVideoID(in node: Any) -> String? {
+        if let dict = node as? [String: Any] {
+            if let watch = dict["watchEndpoint"] as? [String: Any],
+               let id = watch["videoId"] as? String {
+                return id
+            }
+            if let watch = dict["watchPlaylistEndpoint"] as? [String: Any],
+               let id = watch["videoId"] as? String {
+                return id
+            }
+            for value in dict.values {
+                if let found = watchVideoID(in: value) { return found }
+            }
+        } else if let array = node as? [Any] {
+            for value in array {
+                if let found = watchVideoID(in: value) { return found }
+            }
+        }
+        return nil
     }
 }
 

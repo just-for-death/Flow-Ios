@@ -46,6 +46,7 @@ struct SettingsView: View {
                 Section("Player & Network") {
                     NavigationLink("Appearance") { AppearanceSettingsView() }
                     NavigationLink("Player Appearance") { PlayerAppearanceSettingsView() }
+                    NavigationLink("Player Settings") { PlayerBehaviorSettingsView() }
                     NavigationLink("Video Quality") { VideoQualitySettingsView() }
                     NavigationLink("Buffer & Cache") { BufferSettingsView() }
                     NavigationLink("Proxy") { ProxySettingsView() }
@@ -55,6 +56,7 @@ struct SettingsView: View {
                 .listRowBackground(FlowTheme.Colors.surfaceVariant)
 
                 Section("Content & Display") {
+                    NavigationLink("Content Preferences") { UserPreferencesSettingsView() }
                     NavigationLink("Content Display") { ContentSettingsView() }
                     NavigationLink("Navigation") { NavigationSettingsView() }
                     NavigationLink("Date & Time") { DateTimeSettingsView() }

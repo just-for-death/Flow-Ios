@@ -1,7 +1,8 @@
 import Foundation
 
 /// A single line of synced lyrics.
-struct SyncedLyricLine {
+struct SyncedLyricLine: Identifiable {
+    var id: String { "\(time)-\(text)" }
     let time: TimeInterval
     let text: String
 }

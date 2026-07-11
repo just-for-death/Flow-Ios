@@ -26,6 +26,8 @@ final class FlowAVPlayer: NSObject {
     var sponsorSegments: [SponsorSegment] = []
     var sponsorToastMessage: String?
     var isInPiP: Bool         = false
+    /// Loop the current item when it ends (music repeat-one / video loop).
+    var loopCurrentItem: Bool = false
     /// Called when playback ends (unless looping). Set by VideoPlayerView for autoplay.
     var onVideoFinished: (() -> Void)?
 
@@ -44,7 +46,8 @@ final class FlowAVPlayer: NSObject {
 
     private override init() {
         super.init()
-        playbackRate = PlayerPreferences.shared.playbackSpeed
+        let prefs = PlayerPreferences.shared
+        playbackRate = prefs.rememberPlaybackSpeed ? prefs.playbackSpeed : 1.0
         setupTimeObserver()
         setupRemoteCommandCenter()
         SleepTimerManager.shared.attach { [weak self] in self?.pause() }
@@ -249,7 +252,9 @@ final class FlowAVPlayer: NSObject {
 
     func setRate(_ rate: Float) {
         playbackRate = rate
-        PlayerPreferences.shared.playbackSpeed = rate
+        if PlayerPreferences.shared.rememberPlaybackSpeed {
+            PlayerPreferences.shared.playbackSpeed = rate
+        }
         if isPlaying { player.rate = rate }
     }
 
@@ -388,7 +393,7 @@ final class FlowAVPlayer: NSObject {
     @objc private func playerItemDidFinish() {
         SleepTimerManager.shared.onMediaEnded()
         recordWatchProgressIfNeeded(force: true)
-        if PlayerPreferences.shared.videoLoopEnabled, currentVideo != nil {
+        if loopCurrentItem || PlayerPreferences.shared.videoLoopEnabled, currentVideo != nil {
             seek(to: 0)
             player.playImmediately(atRate: playbackRate)
             isPlaying = true

@@ -23,6 +23,7 @@ extension PlayerPreferences {
     var resumePlaybackEnabled: Bool { get { bool("resumePlayback", default: true) } set { set(newValue, "resumePlayback") } }
     var videoLoopEnabled: Bool { get { bool("video_loop_enabled", default: false) } set { set(newValue, "video_loop_enabled") } }
     var autoPipEnabled: Bool { get { bool("auto_pip_enabled", default: true) } set { set(newValue, "auto_pip_enabled") } }
+    var rememberPlaybackSpeed: Bool { get { bool("remember_playback_speed", default: false) } set { set(newValue, "remember_playback_speed") } }
 
     // Downloads
     var downloadThreads: Int { get { int("download_threads", default: 3) } set { set(newValue, "download_threads") } }
