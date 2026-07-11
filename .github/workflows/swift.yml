@@ -1,6 +1,5 @@
-# Flow iOS CI — not a Swift Package Manager project (no Package.swift).
-# Linux: pure-logic + feature suite (no Xcode needed).
-# macOS: XcodeGen + simulator build + unit tests.
+# Flow iOS — XcodeGen app (not SPM). Full feature verification needs the
+# iOS Simulator on macOS. Optional local Linux checks: scripts/test_on_linux.sh
 
 name: Flow iOS
 
@@ -15,22 +14,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux-logic:
-    name: Linux logic checks
-    runs-on: ubuntu-latest
-    container:
-      image: swift:6.0-jammy
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Run Linux feature suite
-        run: bash scripts/test_on_linux.sh
-
   ios-simulator:
-    name: iOS Simulator build + test
+    name: Build + unit tests (Simulator)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          # Prefer newest installed Xcode on the runner
+          XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
 
       - name: Install XcodeGen
         env:
@@ -46,47 +42,56 @@ jobs:
             -project Flow.xcodeproj \
             -scheme Flow
 
-      - name: Build (Simulator)
+      - name: Build for Simulator
         run: |
           set -o pipefail
-          DEST=$(xcodebuild -project Flow.xcodeproj -scheme Flow -showdestinations 2>/dev/null \
-            | grep -o 'platform:iOS Simulator[^,}]*name:[^,]*' \
-            | head -1 \
-            | sed 's/platform:\([^,]*\).*name:\([^,]*\)/platform=\1,name=\2/' \
-            || true)
-          if [[ -z "$DEST" ]]; then
-            DEST='generic/platform=iOS Simulator'
-          fi
-          echo "Using destination: $DEST"
           xcodebuild build \
             -project Flow.xcodeproj \
             -scheme Flow \
-            -destination "$DEST" \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+          # Re-run without xcpretty so failures show full diagnostics
+          xcodebuild build \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Unit tests
+      - name: Run unit tests
         run: |
           set -o pipefail
-          DEST=$(xcodebuild -project Flow.xcodeproj -scheme Flow -showdestinations 2>/dev/null \
-            | grep 'platform:iOS Simulator' \
-            | grep 'name:iPhone' \
-            | head -1 \
-            || true)
-          # Parse id=... from destination line if present
-          SIM_ID=$(echo "$DEST" | grep -o 'id:[A-F0-9-]*' | head -1 | cut -d: -f2 || true)
-          if [[ -n "$SIM_ID" ]]; then
-            xcodebuild test \
-              -project Flow.xcodeproj \
-              -scheme Flow \
-              -destination "platform=iOS Simulator,id=$SIM_ID" \
-              -configuration Debug \
-              CODE_SIGNING_ALLOWED=NO
-          else
-            xcodebuild test \
-              -project Flow.xcodeproj \
-              -scheme Flow \
-              -destination 'generic/platform=iOS Simulator' \
-              -configuration Debug \
-              CODE_SIGNING_ALLOWED=NO
+          # Pick first available iPhone simulator
+          SIM_ID=$(xcrun simctl list devices available -j \
+            | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+for runtime, devices in d.get("devices", {}).items():
+    if "iOS" not in runtime: continue
+    for dev in devices:
+        if dev.get("isAvailable") and "iPhone" in dev.get("name",""):
+            print(dev["udid"]); raise SystemExit
+')
+          if [[ -z "$SIM_ID" ]]; then
+            echo "No iPhone simulator found"
+            xcrun simctl list devices available
+            exit 1
           fi
+          echo "Testing on simulator: $SIM_ID"
+          xcodebuild test \
+            -project Flow.xcodeproj \
+            -scheme Flow \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult
+          path: TestResults.xcresult
+          if-no-files-found: ignore
