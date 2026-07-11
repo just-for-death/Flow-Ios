@@ -772,7 +772,7 @@ extension VideoItem {
         }
         return nil
     }
-
+}
 
 // MARK: - JSON helpers
 extension String {
