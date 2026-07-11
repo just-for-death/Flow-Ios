@@ -70,7 +70,7 @@ final class JSCipher {
         let callable: JSValue?
         if let index = info.arrayIndex {
             let array = context.objectForKeyedSubscript(info.name)
-            callable = array?.objectAtIndexedSubscript(UInt(index))
+            callable = array?.objectAtIndexedSubscript(Int(index))
         } else {
             callable = context.objectForKeyedSubscript(info.name)
         }

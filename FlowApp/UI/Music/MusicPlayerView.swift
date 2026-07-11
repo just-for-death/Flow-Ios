@@ -140,10 +140,12 @@ struct MusicHomeView: View {
 
         // Soft fallbacks when the selected tab is empty
         if tab != .home,
-           let data = try? await InnerTubeClient.shared.browseMusic(browseID: "FEmusic_home"),
-           let parsed = HomeFeedPage.extractMusicSections(from: data), !parsed.isEmpty {
-            sections = parsed
-            return
+           let data = try? await InnerTubeClient.shared.browseMusic(browseID: "FEmusic_home") {
+            let parsed = HomeFeedPage.extractMusicSections(from: data)
+            if !parsed.isEmpty {
+                sections = parsed
+                return
+            }
         }
 
         if let page = try? await InnerTubeClient.shared.search(query: "official music audio") {
