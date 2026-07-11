@@ -81,9 +81,10 @@ private struct FlowRootView: View {
 /// Lightweight top-level navigation / flag store.
 @Observable
 final class AppRouter {
-    var hasCompletedOnboarding: Bool {
-        get { UserDefaults.standard.bool(forKey: "onboardingDone") }
-        set { UserDefaults.standard.set(newValue, forKey: "onboardingDone") }
+    /// Stored so @Observable notifies SwiftUI when onboarding completes.
+    /// (A UserDefaults-only computed property does not trigger view updates.)
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "onboardingDone") {
+        didSet { UserDefaults.standard.set(hasCompletedOnboarding, forKey: "onboardingDone") }
     }
     var activeVideoID: String? = nil
     var activeMusicID: String? = nil

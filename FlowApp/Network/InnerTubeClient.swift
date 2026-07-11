@@ -41,10 +41,10 @@ struct InnerTubeContext: Encodable {
     static func web(visitorData: String? = nil, hl: String? = nil, gl: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "WEB",
-            clientVersion: "2.20240101.00.00",
+            clientVersion: "2.20260213.00.00",
             hl: hl ?? preferredHL,
             gl: gl ?? preferredGL,
-            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
             visitorData: visitorData
         ))
     }
@@ -52,11 +52,17 @@ struct InnerTubeContext: Encodable {
     static func android(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "ANDROID",
-            clientVersion: "19.09.37",
+            clientVersion: "21.03.38",
             hl: preferredHL,
             gl: preferredGL,
-            userAgent: nil,
-            visitorData: visitorData
+            userAgent: "com.google.android.youtube/21.03.38 (Linux; U; Android 14) gzip",
+            visitorData: visitorData,
+            osName: "Android",
+            osVersion: "14",
+            deviceMake: "Google",
+            deviceModel: "Pixel 6 Pro",
+            androidSdkVersion: "34",
+            buildId: "TQ2A.230505.002"
         ))
     }
 
@@ -78,10 +84,10 @@ struct InnerTubeContext: Encodable {
     static func ipados(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "IOS",
-            clientVersion: "21.03.1",
+            clientVersion: "21.03.3",
             hl: preferredHL,
             gl: preferredGL,
-            userAgent: "com.google.ios.youtube/21.03.1 (iPad14,8; U; CPU OS 18_2 like Mac OS X;)",
+            userAgent: "com.google.ios.youtube/21.03.3 (iPad14,8; U; CPU OS 18_2 like Mac OS X;)",
             visitorData: visitorData,
             osName: "iPadOS",
             osVersion: "18.2.22C152",
@@ -125,7 +131,7 @@ struct InnerTubeContext: Encodable {
     static func tv(visitorData: String? = nil) -> InnerTubeContext {
         InnerTubeContext(client: Client(
             clientName: "TVHTML5",
-            clientVersion: "7.20230405.08.01",
+            clientVersion: "7.20260213.00.00",
             hl: preferredHL,
             gl: preferredGL,
             userAgent: "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36; SMART-TV; Tizen 4.0",
@@ -133,14 +139,20 @@ struct InnerTubeContext: Encodable {
         ))
     }
 
+    /// YouTube expects short BCP-47 language / ISO region codes.
     private static var preferredHL: String {
-        UserDefaults.standard.string(forKey: "contentLanguage")
-            ?? Locale.current.language.languageCode?.identifier ?? "en"
+        let raw = UserDefaults.standard.string(forKey: "contentLanguage")
+            ?? Locale.current.language.languageCode?.identifier
+            ?? "en"
+        return String(raw.prefix(2)).lowercased()
     }
 
     private static var preferredGL: String {
-        UserDefaults.standard.string(forKey: "contentRegion")
-            ?? Locale.current.region?.identifier ?? "US"
+        let raw = UserDefaults.standard.string(forKey: "contentRegion")
+            ?? Locale.current.region?.identifier
+            ?? "US"
+        let code = String(raw.prefix(2)).uppercased()
+        return code.count == 2 ? code : "US"
     }
 }
 
@@ -177,8 +189,9 @@ final class InnerTubeClient {
             "Accept":       "application/json",
             "Origin":       "https://www.youtube.com",
             "Referer":      "https://www.youtube.com/",
+            "User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
             "X-YouTube-Client-Name":    "1",
-            "X-YouTube-Client-Version": "2.20240101.00.00"
+            "X-YouTube-Client-Version": "2.20260213.00.00"
         ]
         config.timeoutIntervalForRequest  = 15
         config.timeoutIntervalForResource = 60
@@ -187,22 +200,39 @@ final class InnerTubeClient {
 
     // MARK: - Home Feed
     func fetchHomeFeed(continuation: String? = nil) async throws -> HomeFeedPage {
+        do {
+            return try await fetchHomeFeed(using: .web(visitorData: sanitizedVisitorData), continuation: continuation)
+        } catch let InnerTubeError.httpError(code) where code == 400 {
+            // Stale visitor / client mismatch — clear and retry with IOS context.
+            visitorData = nil
+            return try await fetchHomeFeed(using: .ios(visitorData: nil), continuation: continuation)
+        }
+    }
+
+    private func fetchHomeFeed(using context: InnerTubeContext, continuation: String?) async throws -> HomeFeedPage {
         var body: [String: Any] = [
-            "context": encodeContext(.web(visitorData: visitorData))
+            "context": encodeContext(context)
         ]
         if let cont = continuation {
             body["continuation"] = cont
         } else {
             body["browseId"] = "FEwhat_to_watch"
         }
-        let raw = try await post(to: InnerTubeEndpoints.browse(), body: body)
+        let raw = try await post(to: InnerTubeEndpoints.browse(), body: body, userAgent: context.client.userAgent)
         return try HomeFeedPage(json: raw)
+    }
+
+    private var sanitizedVisitorData: String? {
+        guard let value = visitorData?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              value.hasPrefix("Cg") else { return nil }
+        return value
     }
 
     // MARK: - Search
     func search(query: String, continuation: String? = nil) async throws -> SearchPage {
         var body: [String: Any] = [
-            "context": encodeContext(.web(visitorData: visitorData)),
+            "context": encodeContext(.web(visitorData: sanitizedVisitorData)),
             "query":   query
         ]
         if let cont = continuation { body["continuation"] = cont }
@@ -321,7 +351,7 @@ final class InnerTubeClient {
     // MARK: - Browse (channel / playlist)
     func browse(browseID: String, params: String? = nil, hl: String? = nil, gl: String? = nil) async throws -> Data {
         var body: [String: Any] = [
-            "context":  encodeContext(.web(visitorData: visitorData, hl: hl, gl: gl)),
+            "context":  encodeContext(.web(visitorData: sanitizedVisitorData, hl: hl, gl: gl)),
             "browseId": browseID
         ]
         if let p = params { body["params"] = p }
@@ -329,10 +359,13 @@ final class InnerTubeClient {
     }
 
     // MARK: - Private helpers
-    private func post(to url: URL, body: [String: Any]) async throws -> Data {
+    private func post(to url: URL, body: [String: Any], userAgent: String? = nil) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody   = try JSONSerialization.data(withJSONObject: body)
+        if let userAgent, !userAgent.isEmpty {
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw InnerTubeError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -341,11 +374,28 @@ final class InnerTubeClient {
     }
 
     private func encodeContext(_ ctx: InnerTubeContext, embedVideoID: String? = nil) -> [String: Any] {
-        guard let data = try? JSONEncoder().encode(ctx),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let client = dict["client"] else {
-            return [:]
+        // Build the dictionary directly — JSONEncoder round-trips have produced empty
+        // contexts under some SDK builds, which YouTube rejects with HTTP 400.
+        var client: [String: Any] = [
+            "clientName":    ctx.client.clientName,
+            "clientVersion": ctx.client.clientVersion,
+            "hl":            ctx.client.hl,
+            "gl":            ctx.client.gl
+        ]
+        if let userAgent = ctx.client.userAgent { client["userAgent"] = userAgent }
+        if let visitorData = ctx.client.visitorData, !visitorData.isEmpty {
+            client["visitorData"] = visitorData
         }
+        if let osName = ctx.client.osName { client["osName"] = osName }
+        if let osVersion = ctx.client.osVersion { client["osVersion"] = osVersion }
+        if let deviceMake = ctx.client.deviceMake { client["deviceMake"] = deviceMake }
+        if let deviceModel = ctx.client.deviceModel { client["deviceModel"] = deviceModel }
+        if let androidSdkVersion = ctx.client.androidSdkVersion {
+            client["androidSdkVersion"] = androidSdkVersion
+        }
+        if let buildId = ctx.client.buildId { client["buildId"] = buildId }
+        if let cronetVersion = ctx.client.cronetVersion { client["cronetVersion"] = cronetVersion }
+
         var context: [String: Any] = ["client": client]
         if let embedVideoID {
             context["thirdParty"] = ["embedUrl": "https://www.youtube.com/watch?v=\(embedVideoID)"]

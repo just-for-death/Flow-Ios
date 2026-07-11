@@ -15,7 +15,7 @@ struct OnboardingView: View {
             primaryColor: FlowTheme.Colors.primary
         ),
         OnboardingPage(
-            icon: "brain.filled.head.profile",
+            icon: "brain.head.profile",
             title: "Flow Learns With You",
             body: "FlowNeuro analyzes what you watch, skip, and like — entirely on your device. Your data never leaves your iPhone.",
             primaryColor: FlowTheme.Colors.primary
