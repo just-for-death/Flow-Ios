@@ -210,6 +210,7 @@ final class PlayerPreferences {
 
     private init() {
         AppProxyManager.shared.apply(config: proxyConfig)
-        MediaCacheManager.applySettings()
+        // Do not call MediaCacheManager.applySettings() here — it reads
+        // PlayerPreferences.shared and would recurse through dispatch_once.
     }
 }

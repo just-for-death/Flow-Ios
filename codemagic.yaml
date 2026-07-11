@@ -163,8 +163,28 @@ workflows:
             | xcpretty --color
       - name: Package IPA
         script: |
+          set -euo pipefail
           mkdir -p build/Payload
           mv build/Release-iphoneos/Flow.app build/Payload/
+          # Fail the build if custom Info.plist keys were dropped (causes launch crashes).
+          python3 - <<'PY'
+          import plistlib, pathlib, sys
+          app = next(pathlib.Path("build/Payload").glob("*.app"))
+          info = plistlib.loads((app / "Info.plist").read_bytes())
+          required = [
+              "BGTaskSchedulerPermittedIdentifiers",
+              "UIBackgroundModes",
+              "NSLocalNetworkUsageDescription",
+              "UILaunchScreen",
+              "CFBundleDisplayName",
+          ]
+          missing = [k for k in required if k not in info]
+          if missing:
+              print("ERROR: Flow.app Info.plist missing keys:", missing, file=sys.stderr)
+              print("Present keys:", sorted(info), file=sys.stderr)
+              sys.exit(1)
+          print("Info.plist OK; keys:", len(info))
+          PY
           cd build
           zip -r Flow.ipa Payload
           cd ..

@@ -23,10 +23,13 @@ struct FlowApp: App {
         FlowCrashHandler.install()
         _ = NetworkPathMonitor.shared
         MediaCacheManager.applySettings()
-        NotificationService.shared.registerBackgroundTasks()
-        AutoBackupService.shared.registerBackgroundTasks()
-        NotificationService.shared.reschedule()
-        AutoBackupService.shared.reschedule()
+        // Only register BG tasks when Info.plist lists them (missing IDs SIGTRAP).
+        if Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") != nil {
+            NotificationService.shared.registerBackgroundTasks()
+            AutoBackupService.shared.registerBackgroundTasks()
+            NotificationService.shared.reschedule()
+            AutoBackupService.shared.reschedule()
+        }
         ReminderService.shared.rescheduleAll()
         NotificationService.shared.checkForAppUpdatesIfEnabled()
         Task { await WebPoTokenSession.prewarm() }
