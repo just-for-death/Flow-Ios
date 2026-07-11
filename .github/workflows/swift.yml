@@ -1,5 +1,5 @@
-# Flow iOS — XcodeGen app (not SPM). Full feature verification needs the
-# iOS Simulator on macOS. Optional local Linux checks: scripts/test_on_linux.sh
+# Flow iOS — XcodeGen app (not SPM).
+# Optional local Linux checks: scripts/test_on_linux.sh
 
 name: Flow iOS
 
@@ -22,7 +22,6 @@ jobs:
 
       - name: Select Xcode
         run: |
-          # Prefer newest installed Xcode on the runner
           XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
           echo "Using $XCODE"
           sudo xcode-select -s "$XCODE/Contents/Developer"
@@ -48,42 +47,34 @@ jobs:
           xcodebuild build \
             -project Flow.xcodeproj \
             -scheme Flow \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || true
-          # Re-run without xcpretty so failures show full diagnostics
-          xcodebuild build \
-            -project Flow.xcodeproj \
-            -scheme Flow \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Run unit tests
+      - name: Pick iPhone simulator
+        id: sim
         run: |
-          set -o pipefail
-          # Pick first available iPhone simulator
-          SIM_ID=$(xcrun simctl list devices available -j \
-            | python3 -c '
-import json,sys
-d=json.load(sys.stdin)
-for runtime, devices in d.get("devices", {}).items():
-    if "iOS" not in runtime: continue
-    for dev in devices:
-        if dev.get("isAvailable") and "iPhone" in dev.get("name",""):
-            print(dev["udid"]); raise SystemExit
-')
-          if [[ -z "$SIM_ID" ]]; then
+          SIM_ID=$(xcrun simctl list devices available \
+            | grep -E "iPhone [0-9]" \
+            | grep -v unavailable \
+            | head -1 \
+            | grep -oE "[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}" \
+            | head -1)
+          if [ -z "$SIM_ID" ]; then
             echo "No iPhone simulator found"
             xcrun simctl list devices available
             exit 1
           fi
-          echo "Testing on simulator: $SIM_ID"
+          echo "Using simulator $SIM_ID"
+          echo "id=$SIM_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
           xcodebuild test \
             -project Flow.xcodeproj \
             -scheme Flow \
-            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.id }}" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             -resultBundlePath TestResults.xcresult
