@@ -13,15 +13,9 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    // Category chips
-                    Section {
-                        shelves
-                        // Feed grid
-                        feedContent
-                    } header: {
-                        categoryChips
-                    }
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    shelves
+                    feedContent
                 }
                 .background(
                     GeometryReader { geo in
@@ -34,11 +28,33 @@ struct HomeView: View {
             }
             .coordinateSpace(name: "homeScroll")
             .background(FlowTheme.Colors.background)
-            .navigationTitle("Flow")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(FlowTheme.Colors.primary)
+                        Text("FLOW")
+                            .font(FlowTheme.Typography.brand)
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                            .tracking(1.2)
+                    }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SearchView()
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                    NavigationLink {
+                        NotificationInboxView()
+                    } label: {
+                        Image(systemName: "bell")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
                     NavigationLink {
                         SettingsView()
                     } label: {
@@ -46,17 +62,11 @@ struct HomeView: View {
                             .foregroundStyle(FlowTheme.Colors.onSurface)
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        vm.refresh(neuro: neuro)
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(FlowTheme.Colors.onSurface)
-                    }
-                }
             }
             .refreshable { vm.refresh(neuro: neuro) }
-            .task { if vm.videos.isEmpty { vm.load(neuro: neuro) } }
+            .task {
+                if vm.videos.isEmpty { vm.load(neuro: neuro) }
+            }
             .task { await loadShortsShelf() }
         }
     }
@@ -170,25 +180,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Category chips
-    private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: FlowTheme.Spacing.sm) {
-                ForEach(HomeViewModel.Category.allCases, id: \.self) { cat in
-                    FlowChip(
-                        label: cat.displayName,
-                        isSelected: vm.selectedCategory == cat
-                    ) {
-                        vm.selectCategory(cat, neuro: neuro)
-                    }
-                }
-            }
-            .padding(.horizontal, FlowTheme.Spacing.md)
-            .padding(.vertical, FlowTheme.Spacing.sm)
-        }
-        .background(FlowTheme.Colors.background)
-    }
-
+    // Category chips live on Explore (Android home has none).
     // MARK: - Feed content
     @ViewBuilder
     private var feedContent: some View {

@@ -23,35 +23,37 @@ enum FlowTheme {
         static var sponsorBlock:     Color { ThemeManager.shared.palette.sponsorBlock }
     }
 
-    // MARK: Typography
+    // MARK: Typography — mirrors Android Type.kt (system default / Roboto-equivalent)
     enum Typography {
-        static let displayLarge  = Font.system(size: 57, weight: .regular, design: .rounded)
-        static let displayMedium = Font.system(size: 45, weight: .regular, design: .rounded)
-        static let headlineLarge = Font.system(size: 32, weight: .semibold, design: .rounded)
-        static let headlineMedium = Font.system(size: 28, weight: .semibold, design: .rounded)
-        static let headlineSmall = Font.system(size: 24, weight: .semibold, design: .rounded)
-        static let titleLarge    = Font.system(size: 22, weight: .medium, design: .rounded)
-        static let titleMedium   = Font.system(size: 16, weight: .medium, design: .rounded)
-        static let titleSmall    = Font.system(size: 14, weight: .medium, design: .rounded)
+        static let displayLarge  = Font.system(size: 34, weight: .bold)
+        static let displayMedium = Font.system(size: 28, weight: .bold)
+        static let headlineLarge = Font.system(size: 24, weight: .semibold)
+        static let headlineMedium = Font.system(size: 20, weight: .semibold)
+        static let headlineSmall = Font.system(size: 18, weight: .semibold)
+        static let titleLarge    = Font.system(size: 18, weight: .medium)
+        static let titleMedium   = Font.system(size: 16, weight: .medium)
+        static let titleSmall    = Font.system(size: 14, weight: .medium)
         static let bodyLarge     = Font.system(size: 16, weight: .regular)
         static let bodyMedium    = Font.system(size: 14, weight: .regular)
         static let bodySmall     = Font.system(size: 12, weight: .regular)
         static let labelLarge    = Font.system(size: 14, weight: .medium)
         static let labelMedium   = Font.system(size: 12, weight: .medium)
-        static let labelSmall    = Font.system(size: 11, weight: .medium)
+        static let labelSmall    = Font.system(size: 10, weight: .medium)
+        /// Android ExtraBold brand wordmark (FLOW / MUSIC)
+        static let brand         = Font.system(size: 22, weight: .heavy)
     }
 
-    // MARK: Spacing
+    // MARK: Spacing — Android Dimensions.kt padding ~12dp base
     enum Spacing {
         static let xs:  CGFloat = 4
         static let sm:  CGFloat = 8
-        static let md:  CGFloat = 16
-        static let lg:  CGFloat = 24
-        static let xl:  CGFloat = 32
-        static let xxl: CGFloat = 48
+        static let md:  CGFloat = 12
+        static let lg:  CGFloat = 16
+        static let xl:  CGFloat = 24
+        static let xxl: CGFloat = 32
     }
 
-    // MARK: Radius
+    // MARK: Radius — Android card 8dp, chip 12dp, settings group 16dp
     enum Radius {
         static let sm:   CGFloat = 8
         static let md:   CGFloat = 12
@@ -114,7 +116,8 @@ extension View {
     }
 }
 
-// MARK: - FlowChip
+// MARK: - FlowChip (Android ContentFilterChip)
+/// 12pt rounded rect; selected = onSurface fill + inverse text (not primary capsule).
 struct FlowChip: View {
     let label: String
     let isSelected: Bool
@@ -124,22 +127,11 @@ struct FlowChip: View {
         Button(action: action) {
             Text(label)
                 .font(FlowTheme.Typography.labelMedium)
-                .foregroundStyle(isSelected ? FlowTheme.Colors.onPrimary : FlowTheme.Colors.onSurfaceVariant)
-                .padding(.horizontal, FlowTheme.Spacing.md)
-                .padding(.vertical, FlowTheme.Spacing.xs + 2)
-                .background(
-                    isSelected
-                        ? FlowTheme.Colors.primary
-                        : FlowTheme.Colors.surfaceVariant
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isSelected ? Color.clear : FlowTheme.Colors.outline,
-                            lineWidth: 0.5
-                        )
-                )
+                .foregroundStyle(isSelected ? FlowTheme.Colors.background : FlowTheme.Colors.onSurface)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(isSelected ? FlowTheme.Colors.onSurface : FlowTheme.Colors.surfaceVariant)
+                .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
         }
         .buttonStyle(.plain)
         .animation(FlowTheme.Animation.fast, value: isSelected)
@@ -211,12 +203,12 @@ struct FlowProgressBar: View {
 struct FlowChipButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, FlowTheme.Spacing.md)
-            .padding(.vertical, FlowTheme.Spacing.sm)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
             .background(FlowTheme.Colors.surfaceVariant)
             .foregroundStyle(FlowTheme.Colors.onSurface)
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
             .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
     }
 }

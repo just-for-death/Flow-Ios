@@ -23,11 +23,16 @@ struct CategoriesView: View {
                 .padding(.bottom, FlowTheme.Spacing.md)
             }
             .background(FlowTheme.Colors.background)
-            .navigationTitle("Explore")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(FlowTheme.Colors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    Text("EXPLORE")
+                        .font(FlowTheme.Typography.brand)
+                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                        .tracking(1.2)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { vm.toggleViewMode() } label: {
                         Image(systemName: vm.isListView ? "square.grid.2x2" : "list.bullet")
                             .foregroundStyle(FlowTheme.Colors.onSurface)

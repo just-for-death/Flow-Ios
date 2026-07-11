@@ -40,22 +40,25 @@ struct MusicHomeView: View {
                 } else {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: FlowTheme.Spacing.lg) {
-                            Picker("Section", selection: $tab) {
-                                ForEach(MusicTab.allCases) { t in
-                                    Text(t.label).tag(t)
+                            // Android ContentFilterChip row
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: FlowTheme.Spacing.sm) {
+                                    ForEach(MusicTab.allCases) { t in
+                                        FlowChip(label: t.label, isSelected: tab == t) {
+                                            tab = t
+                                            Task { await loadMusicFeed() }
+                                        }
+                                    }
                                 }
-                            }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal, FlowTheme.Spacing.md)
-                            .onChange(of: tab) { _, _ in
-                                Task { await loadMusicFeed() }
+                                .padding(.horizontal, FlowTheme.Spacing.md)
                             }
 
                             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                                 VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
-                                    Text(section.title)
-                                        .font(FlowTheme.Typography.titleMedium)
+                                    Text(section.title.uppercased())
+                                        .font(FlowTheme.Typography.titleSmall)
                                         .foregroundStyle(FlowTheme.Colors.onSurface)
+                                        .tracking(0.6)
                                         .padding(.horizontal, FlowTheme.Spacing.md)
 
                                     ScrollView(.horizontal, showsIndicators: false) {
@@ -72,22 +75,40 @@ struct MusicHomeView: View {
                             }
                         }
                         .padding(.vertical, FlowTheme.Spacing.md)
+                        .padding(.bottom, 80)
                     }
                 }
             }
             .background(FlowTheme.Colors.background)
-            .navigationTitle("Music")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Text("MUSIC")
+                        .font(FlowTheme.Typography.brand)
+                        .foregroundStyle(FlowTheme.Colors.onSurface)
+                        .tracking(1.2)
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showRecognition = true } label: {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                    .accessibilityLabel("Identify song")
+                    Button {
+                        // Focus search field via searchable
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                    NavigationLink { SettingsView() } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(FlowTheme.Colors.onSurface)
+                    }
+                }
+            }
             .searchable(text: $searchQuery, prompt: "Search songs")
             .onSubmit(of: .search) {
                 Task { await searchMusic() }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showRecognition = true } label: {
-                        Image(systemName: "waveform.circle")
-                    }
-                    .accessibilityLabel("Identify song")
-                }
             }
             .refreshable { await loadMusicFeed() }
         }

@@ -115,7 +115,7 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-// MARK: - FlowTabBar
+// MARK: - FlowTabBar (Android FloatingBottomNavBar)
 struct FlowTabBar: View {
     @Binding var selected: NavTab
     let visibleTabs: [NavTab]
@@ -125,7 +125,7 @@ struct FlowTabBar: View {
 
     var body: some View {
         if isSidebar {
-            VStack(spacing: FlowTheme.Spacing.xl) {
+            VStack(spacing: FlowTheme.Spacing.lg) {
                 ForEach(visibleTabs) { tab in
                     TabBarButton(tab: tab, isSelected: selected == tab) {
                         withAnimation(FlowTheme.Animation.standard) { selected = tab }
@@ -133,12 +133,12 @@ struct FlowTabBar: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, FlowTheme.Spacing.md)
+            .padding(.horizontal, FlowTheme.Spacing.sm)
             .padding(.top, FlowTheme.Spacing.xl * 2)
-            .frame(width: 80)
-            .background(FlowTheme.Colors.surfaceVariant.ignoresSafeArea())
+            .frame(width: 88)
+            .background(FlowTheme.Colors.surface.ignoresSafeArea())
             .overlay(alignment: .trailing) {
-                Rectangle().fill(FlowTheme.Colors.outline).frame(width: 0.5).ignoresSafeArea()
+                Rectangle().fill(FlowTheme.Colors.outline.opacity(0.4)).frame(width: 0.5).ignoresSafeArea()
             }
         } else {
             HStack(spacing: 0) {
@@ -159,14 +159,12 @@ struct FlowTabBar: View {
                     }
                 }
             }
-            .padding(.horizontal, FlowTheme.Spacing.md)
-            .padding(.vertical, FlowTheme.Spacing.sm)
-            .background(
-                FlowTheme.Colors.surfaceVariant
-                    .overlay(FlowTheme.Colors.outline.opacity(0.3), in: Rectangle().inset(by: -0.5))
-            )
+            .padding(.horizontal, 4)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
+            .background(FlowTheme.Colors.surface.ignoresSafeArea(edges: .bottom))
             .overlay(alignment: .top) {
-                Rectangle().fill(FlowTheme.Colors.outline).frame(height: 0.5)
+                Rectangle().fill(FlowTheme.Colors.outline.opacity(0.35)).frame(height: 0.5)
             }
         }
     }
@@ -195,19 +193,32 @@ struct TabBarButton: View {
         self.action = action
     }
 
+    private var title: String { label ?? tab?.label ?? "" }
+    private var icon: String {
+        if let symbol { return symbol }
+        guard let tab else { return "circle" }
+        return isSelected ? tab.symbolSelected : tab.symbol
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: symbol ?? tab?.symbol ?? "circle")
+            VStack(spacing: 2) {
+                Image(systemName: icon)
                     .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? FlowTheme.Colors.primary : FlowTheme.Colors.onSurfaceVariant)
-                    .scaleEffect(isSelected ? 1.1 : 1.0)
+                Text(title)
+                    .font(FlowTheme.Typography.labelSmall)
+                    .foregroundStyle(isSelected ? FlowTheme.Colors.primary : FlowTheme.Colors.onSurfaceVariant)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
+            .frame(height: 48)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(FlowTheme.Animation.fast, value: isSelected)
+        .accessibilityLabel(title)
     }
 }
 

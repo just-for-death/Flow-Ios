@@ -16,8 +16,20 @@ enum NavTab: Int, CaseIterable, Identifiable, Hashable {
 
     var symbol: String {
         switch self {
-        case .home: return "house.fill"
+        case .home: return "house"
         case .shorts: return "play.rectangle.on.rectangle"
+        case .music: return "music.note"
+        case .subscriptions: return "person.2"
+        case .library: return "folder"
+        case .search: return "magnifyingglass"
+        case .explore: return "square.grid.2x2"
+        }
+    }
+
+    var symbolSelected: String {
+        switch self {
+        case .home: return "house.fill"
+        case .shorts: return "play.rectangle.on.rectangle.fill"
         case .music: return "music.note"
         case .subscriptions: return "person.2.fill"
         case .library: return "folder.fill"
@@ -26,12 +38,13 @@ enum NavTab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// Android EN labels (`FloatingBottomNavBar`) — "Subs" not "Subscriptions".
     var label: String {
         switch self {
         case .home: return "Home"
         case .shorts: return "Shorts"
         case .music: return "Music"
-        case .subscriptions: return "Subscriptions"
+        case .subscriptions: return "Subs"
         case .library: return "Library"
         case .search: return "Search"
         case .explore: return "Explore"
