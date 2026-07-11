@@ -300,20 +300,29 @@ actor SyncConnection {
     func startListening() async throws -> UInt16 {
         guard let listener = listener else { throw SyncError.connectionClosed }
         return try await withCheckedThrowingContinuation { cont in
-            var resumed = false
+            final class Once {
+                var done = false
+                let lock = NSLock()
+                func run(_ body: () -> Void) {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    guard !done else { return }
+                    done = true
+                    body()
+                }
+            }
+            let once = Once()
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    if let port = listener.port?.rawValue, !resumed {
-                        resumed = true
-                        Task { await self.setBoundPort(port) }
-                        cont.resume(returning: port)
+                    if let port = listener.port?.rawValue {
+                        once.run {
+                            Task { await self.setBoundPort(port) }
+                            cont.resume(returning: port)
+                        }
                     }
                 case .failed(let err):
-                    if !resumed {
-                        resumed = true
-                        cont.resume(throwing: err)
-                    }
+                    once.run { cont.resume(throwing: err) }
                 default: break
                 }
             }
