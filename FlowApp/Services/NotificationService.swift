@@ -71,6 +71,15 @@ final class NotificationService {
         await postNotification(title: "Download complete", body: title, id: "dl_\(UUID().uuidString)")
     }
 
+    func notifyDownloadFailed(title: String, reason: String) async {
+        guard PlayerPreferences.shared.notifDownloadsEnabled else { return }
+        await postNotification(
+            title: "Download failed",
+            body: "\(title): \(reason)",
+            id: "dl_fail_\(UUID().uuidString)"
+        )
+    }
+
     /// Checks GitHub releases for a newer Flow iOS version (mirrors Android update checker).
     func checkForAppUpdatesIfEnabled() {
         guard PlayerPreferences.shared.notificationsEnabled,

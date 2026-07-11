@@ -208,6 +208,7 @@ struct LikedTab: View {
 struct DownloadsTab: View {
     @Environment(FlowAVPlayer.self) private var player
     private var downloadService = DownloadService.shared
+    @State private var showError = false
 
     var body: some View {
         let downloads = Array(downloadService.metadataStore.values).sorted { $0.title < $1.title }
@@ -244,6 +245,14 @@ struct DownloadsTab: View {
                 }
             }
         }
+        .onChange(of: downloadService.lastError) { _, newValue in
+            showError = newValue != nil
+        }
+        .alert("Download failed", isPresented: $showError) {
+            Button("OK") { downloadService.clearLastError() }
+        } message: {
+            Text(downloadService.lastError ?? "")
+        }
     }
 }
 
@@ -269,18 +278,40 @@ struct DownloadRow: View {
                     .font(FlowTheme.Typography.bodySmall)
                     .foregroundStyle(FlowTheme.Colors.onSurfaceVariant)
 
-                if task.progress < 1 {
+                if task.state == .failed {
+                    Text(task.errorMessage ?? "Download failed")
+                        .font(FlowTheme.Typography.labelSmall)
+                        .foregroundStyle(FlowTheme.Colors.error)
+                        .lineLimit(2)
+                } else if task.state == .downloading {
                     ProgressView(value: task.progress)
                         .tint(FlowTheme.Colors.primary)
                 }
             }
             Spacer()
 
-            Image(systemName: task.progress >= 1 ? "checkmark.circle.fill" : "arrow.down.circle")
-                .foregroundStyle(task.progress >= 1 ? FlowTheme.Colors.primary : FlowTheme.Colors.onSurfaceVariant)
+            Image(systemName: statusIcon)
+                .foregroundStyle(statusColor)
         }
-        .flowCard()
         .padding(FlowTheme.Spacing.sm)
+        .background(FlowTheme.Colors.surfaceVariant)
+        .clipShape(RoundedRectangle(cornerRadius: FlowTheme.Radius.md))
+    }
+
+    private var statusIcon: String {
+        switch task.state {
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        case .downloading: return "arrow.down.circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch task.state {
+        case .completed: return FlowTheme.Colors.primary
+        case .failed: return FlowTheme.Colors.error
+        case .downloading: return FlowTheme.Colors.onSurfaceVariant
+        }
     }
 }
 

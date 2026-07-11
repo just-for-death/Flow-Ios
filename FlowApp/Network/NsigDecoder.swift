@@ -7,7 +7,8 @@ import os
 enum NsigDecoder {
     private static let latestPlayerURL = URL(string: "https://api.pipepipe.dev/decoder/latest-player")!
     private static let decodeURL       = URL(string: "https://api.pipepipe.dev/decoder/decode")!
-    private static let userAgent       = "Flow-iOS/1.0"
+    /// Match Android PipePipeNsigDecoder UA — remote API is picky about clients.
+    private static let userAgent       = "PipePipe/4.9.0"
     private static let playerTTL: TimeInterval = 24 * 60 * 60
 
     private struct State {
@@ -122,6 +123,16 @@ enum NsigDecoder {
               let payload = first["data"] as? [String: String] else { return nil }
         return payload
     }
+
+    #if DEBUG
+    static func parseDecodeResponseForTesting(_ data: Data) -> [String: String]? {
+        parseDecodeResponse(data)
+    }
+
+    static var cachedSignatureTimestampForTesting: Int? {
+        state.withLock { $0.signatureTimestamp }
+    }
+    #endif
 
     private static func rawN(in url: String) -> String? {
         let nsRange = NSRange(url.startIndex..<url.endIndex, in: url)

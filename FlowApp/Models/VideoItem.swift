@@ -755,6 +755,13 @@ extension VideoItem {
                let id = watch["videoId"] as? String {
                 return id
             }
+            if let data = dict["playlistItemData"] as? [String: Any],
+               let id = data["videoId"] as? String {
+                return id
+            }
+            if let id = dict["videoId"] as? String, id.count >= 11 {
+                return id
+            }
             for value in dict.values {
                 if let found = watchVideoID(in: value) { return found }
             }
@@ -765,7 +772,7 @@ extension VideoItem {
         }
         return nil
     }
-}
+
 
 // MARK: - JSON helpers
 extension String {

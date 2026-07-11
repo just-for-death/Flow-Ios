@@ -10,6 +10,7 @@ struct DownloadTask: Identifiable, Codable {
     var progress: Double      // 0…1
     var state: State
     var localURL: URL?
+    var errorMessage: String?
 
     enum State: String, Codable { case downloading, completed, failed }
 }
@@ -24,6 +25,8 @@ final class DownloadService: NSObject {
 
     private(set) var activeTasks: [String: DownloadTask] = [:]
     private(set) var metadataStore: [String: DownloadTask] = [:]
+    /// Latest user-visible failure (Library / toast). Cleared on next successful enqueue.
+    private(set) var lastError: String?
     private var pendingDownloads: [(VideoItem, StreamInfo?)] = []
     var backgroundCompletionHandler: (() -> Void)?
     private var urlSession: URLSession!
@@ -34,6 +37,8 @@ final class DownloadService: NSObject {
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         loadMetadata()
     }
+
+    func clearLastError() { lastError = nil }
 
     // MARK: - Metadata Persistence
     private var metadataURL: URL {
@@ -59,7 +64,16 @@ final class DownloadService: NSObject {
     @MainActor
     private func enqueueDownload(video: VideoItem, stream: StreamInfo?) async {
         let prefs = PlayerPreferences.shared
-        if prefs.downloadOverWifiOnly && NetworkPathMonitor.shared.isExpensive { return }
+        if prefs.downloadOverWifiOnly && NetworkPathMonitor.shared.isExpensive {
+            markFailed(
+                videoID: video.id,
+                title: video.title,
+                channelName: video.channelName,
+                thumbnailURL: video.thumbnailURL,
+                reason: "Wi‑Fi only downloads are enabled. Connect to Wi‑Fi and try again."
+            )
+            return
+        }
         guard activeTasks[video.id]?.state != .downloading else { return }
 
         let maxConcurrent = prefs.parallelDownloadEnabled ? max(1, prefs.downloadThreads) : 1
@@ -71,6 +85,7 @@ final class DownloadService: NSObject {
             return
         }
 
+        lastError = nil
         let resolvedStream: StreamInfo
         if let stream {
             resolvedStream = stream
@@ -82,6 +97,13 @@ final class DownloadService: NSObject {
                     preferredQuality: prefs.defaultDownloadQuality
                 )
             } catch {
+                markFailed(
+                    videoID: video.id,
+                    title: video.title,
+                    channelName: video.channelName,
+                    thumbnailURL: video.thumbnailURL,
+                    reason: error.localizedDescription
+                )
                 return
             }
         }
@@ -94,6 +116,39 @@ final class DownloadService: NSObject {
             startURLDownload(video: video, url: mux)
         } else if let videoURL = stream.videoURL, let audioURL = stream.audioURL {
             Task { await downloadDASH(video: video, videoURL: videoURL, audioURL: audioURL) }
+        } else {
+            markFailed(
+                videoID: video.id,
+                title: video.title,
+                channelName: video.channelName,
+                thumbnailURL: video.thumbnailURL,
+                reason: "No downloadable stream found for this video."
+            )
+        }
+    }
+
+    @MainActor
+    private func markFailed(
+        videoID: String,
+        title: String,
+        channelName: String,
+        thumbnailURL: URL?,
+        reason: String
+    ) {
+        var task = activeTasks[videoID] ?? DownloadTask(
+            id: videoID, title: title, channelName: channelName,
+            thumbnailURL: thumbnailURL, progress: 0, state: .failed,
+            localURL: nil, errorMessage: reason
+        )
+        task.state = .failed
+        task.errorMessage = reason
+        activeTasks[videoID] = task
+        metadataStore[videoID] = task
+        lastError = reason
+        saveMetadata()
+        FlowLogStore.shared.log("Download failed \(videoID): \(reason)", level: "E")
+        Task {
+            await NotificationService.shared.notifyDownloadFailed(title: title, reason: reason)
         }
     }
 
@@ -112,7 +167,8 @@ final class DownloadService: NSObject {
         let task = urlSession.downloadTask(with: url)
         let dt = DownloadTask(
             id: video.id, title: video.title, channelName: video.channelName,
-            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading, localURL: nil
+            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading,
+            localURL: nil, errorMessage: nil
         )
         activeTasks[video.id] = dt
         metadataStore[video.id] = dt
@@ -125,7 +181,8 @@ final class DownloadService: NSObject {
     private func downloadDASH(video: VideoItem, videoURL: URL, audioURL: URL) async {
         let dt = DownloadTask(
             id: video.id, title: video.title, channelName: video.channelName,
-            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading, localURL: nil
+            thumbnailURL: video.thumbnailURL, progress: 0, state: .downloading,
+            localURL: nil, errorMessage: nil
         )
         activeTasks[video.id] = dt
         metadataStore[video.id] = dt
@@ -160,14 +217,19 @@ final class DownloadService: NSObject {
             activeTasks[video.id]?.state = .completed
             activeTasks[video.id]?.progress = 1
             activeTasks[video.id]?.localURL = dest
+            activeTasks[video.id]?.errorMessage = nil
             metadataStore[video.id] = activeTasks[video.id]
             saveMetadata()
             await NotificationService.shared.notifyDownloadComplete(title: video.title)
             await drainDownloadQueue()
         } catch {
-            activeTasks[video.id]?.state = .failed
-            metadataStore[video.id]?.state = .failed
-            saveMetadata()
+            markFailed(
+                videoID: video.id,
+                title: video.title,
+                channelName: video.channelName,
+                thumbnailURL: video.thumbnailURL,
+                reason: error.localizedDescription
+            )
             await drainDownloadQueue()
         }
     }
@@ -178,11 +240,10 @@ final class DownloadService: NSObject {
         activeTasks.removeValue(forKey: videoID)
         metadataStore.removeValue(forKey: videoID)
         saveMetadata()
-        
-        // Also remove file if it exists
+
         let dest = documentsURL.appendingPathComponent("\(videoID).mp4")
         try? FileManager.default.removeItem(at: dest)
-        
+
         urlSession.getAllTasks { tasks in
             tasks.first { $0.taskDescription == videoID }?.cancel()
         }
@@ -217,18 +278,36 @@ extension DownloadService: URLSessionDownloadDelegate {
                     didFinishDownloadingTo location: URL) {
         guard let videoID = downloadTask.taskDescription else { return }
         let dest = documentsURL.appendingPathComponent("\(videoID).mp4")
-        // Remove existing file if present to overwrite
         try? FileManager.default.removeItem(at: dest)
-        try? FileManager.default.moveItem(at: location, to: dest)
-        
+        do {
+            try FileManager.default.moveItem(at: location, to: dest)
+        } catch {
+            DispatchQueue.main.async {
+                let title = self.metadataStore[videoID]?.title ?? videoID
+                let channel = self.metadataStore[videoID]?.channelName ?? ""
+                let thumb = self.metadataStore[videoID]?.thumbnailURL
+                self.markFailed(
+                    videoID: videoID,
+                    title: title,
+                    channelName: channel,
+                    thumbnailURL: thumb,
+                    reason: "Could not save file: \(error.localizedDescription)"
+                )
+                Task { await self.drainDownloadQueue() }
+            }
+            return
+        }
+
         DispatchQueue.main.async {
             self.activeTasks[videoID]?.state    = .completed
             self.activeTasks[videoID]?.progress = 1
             self.activeTasks[videoID]?.localURL = dest
-            
+            self.activeTasks[videoID]?.errorMessage = nil
+
             self.metadataStore[videoID]?.state = .completed
             self.metadataStore[videoID]?.progress = 1
             self.metadataStore[videoID]?.localURL = dest
+            self.metadataStore[videoID]?.errorMessage = nil
             self.saveMetadata()
             let title = self.metadataStore[videoID]?.title ?? videoID
             Task {
@@ -241,11 +320,18 @@ extension DownloadService: URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let downloadTask = task as? URLSessionDownloadTask,
               let videoID = downloadTask.taskDescription,
-              error != nil else { return }
+              let error else { return }
         DispatchQueue.main.async {
-            self.activeTasks[videoID]?.state = .failed
-            self.metadataStore[videoID]?.state = .failed
-            self.saveMetadata()
+            let title = self.metadataStore[videoID]?.title ?? videoID
+            let channel = self.metadataStore[videoID]?.channelName ?? ""
+            let thumb = self.metadataStore[videoID]?.thumbnailURL
+            self.markFailed(
+                videoID: videoID,
+                title: title,
+                channelName: channel,
+                thumbnailURL: thumb,
+                reason: error.localizedDescription
+            )
             Task { await self.drainDownloadQueue() }
         }
     }

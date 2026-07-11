@@ -9,6 +9,19 @@ struct MusicHomeView: View {
     @State private var showPlayer = false
     @State private var showRecognition = false
     @State private var searchQuery = ""
+    @State private var tab: MusicTab = .home
+
+    private enum MusicTab: String, CaseIterable, Identifiable {
+        case home, charts, explore
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .home: return "Home"
+            case .charts: return "Charts"
+            case .explore: return "Explore"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,6 +40,17 @@ struct MusicHomeView: View {
                 } else {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: FlowTheme.Spacing.lg) {
+                            Picker("Section", selection: $tab) {
+                                ForEach(MusicTab.allCases) { t in
+                                    Text(t.label).tag(t)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, FlowTheme.Spacing.md)
+                            .onChange(of: tab) { _, _ in
+                                Task { await loadMusicFeed() }
+                            }
+
                             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                                 VStack(alignment: .leading, spacing: FlowTheme.Spacing.sm) {
                                     Text(section.title)
@@ -88,21 +112,37 @@ struct MusicHomeView: View {
         loadError = nil
         defer { isLoading = false }
 
-        if let data = try? await InnerTubeClient.shared.browseMusic(browseID: "FEmusic_home") {
+        let browseID: String
+        let params: String?
+        switch tab {
+        case .home:
+            browseID = "FEmusic_home"
+            params = nil
+        case .charts:
+            browseID = "FEmusic_charts"
+            params = "ggMGCgQIgAQ%3D"
+        case .explore:
+            browseID = "FEmusic_explore"
+            params = nil
+        }
+
+        if let data = try? await InnerTubeClient.shared.browseMusic(browseID: browseID, params: params) {
             let parsed = HomeFeedPage.extractMusicSections(from: data)
             if !parsed.isEmpty {
                 sections = parsed
                 return
             }
             if let page = try? HomeFeedPage(json: data), !page.videos.isEmpty {
-                sections = [("For you", page.videos)]
+                sections = [(tab.label, page.videos)]
                 return
             }
         }
 
-        if let data = try? await InnerTubeClient.shared.browseMusic(browseID: "FEmusic_charts", params: "ggMGCgQIgAQ%3D"),
-           let page = try? HomeFeedPage(json: data), !page.videos.isEmpty {
-            sections = [("Charts", page.videos)]
+        // Soft fallbacks when the selected tab is empty
+        if tab != .home,
+           let data = try? await InnerTubeClient.shared.browseMusic(browseID: "FEmusic_home"),
+           let parsed = HomeFeedPage.extractMusicSections(from: data), !parsed.isEmpty {
+            sections = parsed
             return
         }
 
@@ -319,6 +359,16 @@ struct MusicPlayerView: View {
                 .padding(.top, FlowTheme.Spacing.md)
 
                 Spacer()
+            }
+        }
+        .overlay(alignment: .top) {
+            if let error = player.error {
+                Text(error.localizedDescription)
+                    .font(FlowTheme.Typography.bodySmall)
+                    .foregroundStyle(.white)
+                    .padding(FlowTheme.Spacing.md)
+                    .frame(maxWidth: .infinity)
+                    .background(FlowTheme.Colors.error.opacity(0.9))
             }
         }
         .sheet(isPresented: $showLyrics) {

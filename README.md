@@ -1,41 +1,62 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/A-EDev/Flow/main/Assets/logo.png" alt="Flow Logo" width="140" height="140">
-  
+
   # Flow iOS
-  
+
   <p><b>An unofficial iOS port of the original <a href="https://github.com/A-EDev/Flow">Flow Android</a> project.</b></p>
 
-  <img src="https://img.shields.io/badge/Platform-iOS_16.0+-black?style=for-the-badge&logo=apple&logoColor=white">
-  <img src="https://img.shields.io/badge/Swift-5.9+-FA7343?style=for-the-badge&logo=swift&logoColor=white">
+  <img src="https://img.shields.io/badge/Platform-iOS_17.0+-black?style=for-the-badge&logo=apple&logoColor=white">
+  <img src="https://img.shields.io/badge/Swift-5.10-FA7343?style=for-the-badge&logo=swift&logoColor=white">
   <img src="https://img.shields.io/badge/UI-SwiftUI-3478F6?style=for-the-badge&logo=swift&logoColor=white">
 </div>
 
 <br>
 
-**Flow iOS** is an open-source, beautifully designed native iOS client for YouTube, replicating the beloved Material 3 experience of the original [Flow Android](https://github.com/A-EDev/Flow) app.
+**Flow iOS** is an open-source native YouTube client for iPhone and iPad. It ports the core Flow Android experience (playback, FlowNeuro, FLOW-SYNC/1, SponsorBlock) to SwiftUI. It is a **condensed, workable port** — not a line-for-line Android twin.
 
-This project was built from the ground up in Swift/SwiftUI to achieve true feature parity with its Android sibling, allowing seamless cross-platform syncing.
+## Features
 
-## ✨ Features
+- Home / For You (on-device FlowNeuro ranking), Shorts, Search, Library, Subscriptions
+- Background playback, PiP, lock-screen controls, SponsorBlock
+- YouTube Music home / charts / explore shelves + LRCLib lyrics
+- Offline downloads with visible failure states
+- FLOW-SYNC/1 LAN sync (history, likes, playlists, brain, subscriptions)
+- DeArrow & Return YouTube Dislike
+- Interests onboarding + content preferences
 
-- **Material 3 Design**: Accurately recreated using Apple's HIG primitives in SwiftUI.
-- **Background Playback & PiP**: Full Picture-in-Picture support and lock screen media controls.
-- **FlowNeuro Engine**: Runs the exact same mathematical vector blending and cosine similarity models locally on your iPhone for unparalleled privacy-respecting recommendations.
-- **Cross-Platform Syncing**: Sync your watch history, liked videos, playlists, and FlowNeuro brain between your Android and iOS devices over local Wi-Fi via `FLOW-SYNC/1`.
-- **Ad-Free & SponsorBlock**: Enjoy ad-free streaming with built-in community segment skipping.
-- **DeArrow & Return YouTube Dislike**: Community titles, thumbnails, and dislike counts natively integrated.
-- **LRCLib Lyrics**: Fully synchronized scrolling lyrics for music playback.
-- **Offline Downloads**: Save videos and music directly to your device for offline viewing.
+## Honest status
 
-## 🤝 Original Project
-This app is a port of the amazing [**Flow**](https://github.com/A-EDev/Flow) project created by [A-EDev](https://github.com/A-EDev). All credit for the original architecture, design language, and the revolutionary `FlowNeuro` recommendation system goes to the original creator.
+| Area | Status |
+|------|--------|
+| Browse + play video | Real InnerTube → stream resolve → AVPlayer |
+| n-sig deobfuscation | Local player.js first, then PipePipe API |
+| Android feature parity | Partial (~75 Swift app files vs hundreds of Kotlin) |
+| App Store | Not distributed; sideload / Codemagic unsigned IPA |
 
-## 🚀 Building from Source
-1. Clone this repository.
-2. Open `FlowApp.xcodeproj` (or the folder) in Xcode 15+.
-3. Select your target device or simulator.
-4. Hit `Cmd + R` to build and run.
-*Note: No third-party dependencies are required. The entire app uses native Swift frameworks (AVFoundation, SwiftUI, Network, CryptoKit, NaturalLanguage).*
+Playback can break when YouTube changes clients or when remote n-sig helpers are down. Prefer the latest build from CI/Codemagic.
 
-## 📄 License
-Like the original project, Flow iOS is licensed under the **GPLv3 License**. You may use, study, share, and improve it freely, provided any derived work remains Open Source under the same terms.
+## Building from source
+
+**Requirements:** macOS, Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+
+```bash
+brew install xcodegen   # if needed
+cd Flow-Ios
+xcodegen generate
+open Flow.xcodeproj
+```
+
+SPM dependencies (resolved by Xcode): **Kingfisher**, **GRDB**, **ZIPFoundation**.
+
+### CI / IPA
+
+- GitHub Actions: simulator build + unit tests (`.github/workflows/swift.yml`)
+- Codemagic: signed release + unsigned IPA with Info.plist merge (`codemagic.yaml`)
+
+## Original project
+
+Port of [**Flow**](https://github.com/A-EDev/Flow) by [A-EDev](https://github.com/A-EDev). Credit for architecture, design language, and FlowNeuro belongs to the original project.
+
+## License
+
+GPLv3 — same as the Android project.

@@ -408,41 +408,51 @@ final class NeuroEngine {
         let norm = topic.trimmingCharacters(in: .whitespaces).lowercased()
         guard !norm.isEmpty else { return }
         let lemma = tokenizer.normalizeLemma(norm)
-        brain.globalVector.topics = brain.globalVector.topics.filter { !$0.key.contains(lemma) && !$0.key.contains(norm) }
-        brain.timeVectors = brain.timeVectors.mapValues { v in
+        var b = brain
+        b.globalVector.topics = b.globalVector.topics.filter { !$0.key.contains(lemma) && !$0.key.contains(norm) }
+        b.timeVectors = b.timeVectors.mapValues { v in
             var t = v; t.topics = t.topics.filter { !$0.key.contains(lemma) }; return t
         }
-        brain.blockedTopics.insert(norm)
-        brain.preferredTopics.remove(norm)
+        b.blockedTopics.insert(norm)
+        b.preferredTopics.remove(norm)
+        brain = b
         scheduleDebouncedSave()
     }
 
     func addBlockedChannel(_ channelId: String) {
         guard !channelId.isEmpty else { return }
-        brain.blockedChannels.insert(channelId)
-        brain.channelScores.removeValue(forKey: channelId)
+        var b = brain
+        b.blockedChannels.insert(channelId)
+        b.channelScores.removeValue(forKey: channelId)
+        brain = b
         scheduleDebouncedSave()
     }
 
     func addPreferredTopic(_ topic: String) {
         let norm = topic.trimmingCharacters(in: .whitespaces)
         guard !norm.isEmpty else { return }
-        brain.preferredTopics.insert(norm)
-        brain.globalVector.topics[tokenizer.normalizeLemma(norm)] = 0.5
+        var b = brain
+        b.preferredTopics.insert(norm)
+        b.globalVector.topics[tokenizer.normalizeLemma(norm)] = 0.5
+        brain = b
         scheduleDebouncedSave()
     }
 
     func removePreferredTopic(_ topic: String) {
         let norm = topic.trimmingCharacters(in: .whitespaces)
-        brain.preferredTopics.remove(norm)
-        brain.preferredTopics.remove(norm.lowercased())
-        brain.globalVector.topics.removeValue(forKey: tokenizer.normalizeLemma(norm))
+        var b = brain
+        b.preferredTopics.remove(norm)
+        b.preferredTopics.remove(norm.lowercased())
+        b.globalVector.topics.removeValue(forKey: tokenizer.normalizeLemma(norm))
+        brain = b
         scheduleDebouncedSave()
     }
 
     func removeBlockedTopic(_ topic: String) {
         let norm = topic.trimmingCharacters(in: .whitespaces).lowercased()
-        brain.blockedTopics.remove(norm)
+        var b = brain
+        b.blockedTopics.remove(norm)
+        brain = b
         scheduleDebouncedSave()
     }
 

@@ -7,6 +7,7 @@ enum StreamURLResolver {
 
     private static var playerJSCache: (id: String, source: String, fetchedAt: TimeInterval)?
     private static let playerCacheTTL: TimeInterval = 6 * 60 * 60
+    private static let nParamRegex = try! NSRegularExpression(pattern: #"([?&])n=([^&]+)"#)
 
     /// Resolves a playable URL for a format, applying cipher + n-transform when needed.
     static func resolveURL(for format: PlayerResponse.StreamingData.Format, videoID: String) async -> URL? {
@@ -20,7 +21,7 @@ enum StreamURLResolver {
         }
 
         guard let raw, let url = URL(string: raw) else { return nil }
-        return await deobfuscateNIfNeeded(url)
+        return await deobfuscateNIfNeeded(url, videoID: videoID)
     }
 
     // MARK: - Cipher resolution
@@ -51,7 +52,7 @@ enum StreamURLResolver {
 
     // MARK: - Player JS
 
-    private static func fetchPlayerJavaScript(videoID: String) async throws -> String {
+    static func fetchPlayerJavaScript(videoID: String) async throws -> String {
         if let cached = playerJSCache, Date().timeIntervalSince1970 - cached.fetchedAt < playerCacheTTL {
             return cached.source
         }
@@ -93,15 +94,44 @@ enum StreamURLResolver {
         return source
     }
 
-    // MARK: - n-transform
+    // MARK: - n-transform (local JS → PipePipe → passthrough)
 
-    private static func deobfuscateNIfNeeded(_ url: URL) async -> URL {
-        if url.absoluteString.contains("n=") {
-            if let transformed = await NsigDecoder.deobfuscate(url: url) {
-                return transformed
-            }
+    private static func deobfuscateNIfNeeded(_ url: URL, videoID: String) async -> URL {
+        guard url.absoluteString.contains("n="),
+              let rawN = JSCipher.rawN(in: url.absoluteString) else {
+            return url
         }
+
+        // 1) Local player.js transform (no remote dependency)
+        if let js = try? await fetchPlayerJavaScript(videoID: videoID),
+           let local = try? JSCipher.shared.transformN(rawN, jsSource: js),
+           let replaced = replaceN(in: url, with: local) {
+            return replaced
+        }
+
+        // 2) PipePipe remote decoder
+        if let remote = await NsigDecoder.deobfuscate(url: url) {
+            return remote
+        }
+
+        // 3) Last resort — may throttle, but keeps formats available for mux fallback
+        FlowLogStore.shared.log("n-transform failed for \(videoID); using raw URL", level: "W")
         return url
+    }
+
+    private static func replaceN(in url: URL, with decoded: String) -> URL? {
+        let encoded = decoded.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? decoded
+        let string = url.absoluteString
+        let nsRange = NSRange(string.startIndex..<string.endIndex, in: string)
+        guard let match = nParamRegex.firstMatch(in: string, range: nsRange),
+              let prefixRange = Range(match.range(at: 1), in: string) else { return nil }
+        let prefix = String(string[prefixRange])
+        let replaced = nParamRegex.stringByReplacingMatches(
+            in: string,
+            range: nsRange,
+            withTemplate: "\(prefix)n=\(encoded)"
+        )
+        return URL(string: replaced)
     }
 
     /// Resolves root-relative YouTube paths (e.g. `/s/player/.../base.js`) to absolute URLs.

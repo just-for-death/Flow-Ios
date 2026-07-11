@@ -43,6 +43,8 @@ final class FlowAVPlayer: NSObject {
     private let innerTube = InnerTubeClient.shared
     private let sponsorBlock = SponsorBlockService.shared
     private var pipController: AVPictureInPictureController?
+    /// True after we already fell back from DASH to mux for the current video.
+    private var usedMuxFallback = false
 
     private override init() {
         super.init()
@@ -72,6 +74,7 @@ final class FlowAVPlayer: NSObject {
         Task { @MainActor in
             currentVideo  = video
             resumeAppliedForVideoID = nil
+            usedMuxFallback = false
             isLoading     = true
             error         = nil
             sponsorSegments = []
@@ -88,7 +91,7 @@ final class FlowAVPlayer: NSObject {
                 self.isPlaying = true
                 self.isLoading = false
                 
-                // Stub stream info for UI
+                // Local file metadata for now-playing / UI
                 self.streamInfo = StreamInfo(
                     videoURL: nil,
                     audioURL: nil,
@@ -114,21 +117,18 @@ final class FlowAVPlayer: NSObject {
                 duration   = stream.duration
 
                 let item: AVPlayerItem
-                
-                // Attempt DASH merge; fall back to progressive mux if composition fails.
+
+                // Prefer DASH A/V merge; fall back to progressive mux (never silent video-only).
                 if let vURL = stream.videoURL, let aURL = stream.audioURL {
                     do {
                         item = try await createDASHPlayerItem(videoURL: vURL, audioURL: aURL)
                     } catch {
-                        if let fallback = stream.fallbackURL {
-                            item = AVPlayerItem(url: fallback)
-                        } else if let videoOnly = stream.videoURL {
-                            item = AVPlayerItem(url: videoOnly)
-                        } else {
-                            throw error
-                        }
+                        guard let fallback = stream.fallbackURL else { throw error }
+                        usedMuxFallback = true
+                        item = AVPlayerItem(url: fallback)
                     }
                 } else if let fallback = stream.fallbackURL {
+                    usedMuxFallback = true
                     item = AVPlayerItem(url: fallback)
                 } else {
                     throw InnerTubeError.noStreamsAvailable
@@ -373,7 +373,8 @@ final class FlowAVPlayer: NSObject {
         itemObservations = [
             item.observe(\.status) { [weak self] item, _ in
                 DispatchQueue.main.async {
-                    if item.status == .failed { self?.error = item.error }
+                    guard let self, item.status == .failed else { return }
+                    self.retryWithMuxIfPossible(failedError: item.error)
                 }
             },
             item.observe(\.duration) { [weak self] item, _ in
@@ -388,6 +389,30 @@ final class FlowAVPlayer: NSObject {
                 }
             }
         ]
+    }
+
+    /// When DASH composition loads but AVPlayer fails (codec/throttle), retry progressive mux.
+    @MainActor
+    private func retryWithMuxIfPossible(failedError: Error?) {
+        guard !usedMuxFallback,
+              let mux = streamInfo?.fallbackURL else {
+            error = failedError ?? InnerTubeError.noStreamsAvailable
+            isLoading = false
+            isPlaying = false
+            return
+        }
+        usedMuxFallback = true
+        FlowLogStore.shared.log("DASH item failed; retrying mux fallback", level: "W")
+        error = nil
+        let item = AVPlayerItem(url: mux)
+        player.replaceCurrentItem(with: item)
+        observePlayerItem(item)
+        if let video = currentVideo {
+            applyResumeIfNeeded(for: video)
+        }
+        player.playImmediately(atRate: playbackRate)
+        isPlaying = true
+        isLoading = false
     }
 
     @objc private func playerItemDidFinish() {
