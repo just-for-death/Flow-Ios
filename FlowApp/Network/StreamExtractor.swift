@@ -151,13 +151,17 @@ enum StreamExtractor {
     }
 
     #if DEBUG
+    private enum RaceResult<T> {
+        case value(T)
+        case timedOut
+    }
+
     /// Races an async operation against a timeout — mirrors `fetchWithClient` behavior for unit tests.
     static func raceForTesting<T>(
         fetch: @escaping () async throws -> T,
         timeoutSeconds: TimeInterval
     ) async -> T? {
-        enum Race { case value(T); case timedOut }
-        return await withTaskGroup(of: Race.self) { group in
+        await withTaskGroup(of: RaceResult<T>.self) { group in
             group.addTask {
                 do { return .value(try await fetch()) }
                 catch { return .timedOut }

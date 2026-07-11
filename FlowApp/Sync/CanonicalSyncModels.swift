@@ -41,6 +41,12 @@ enum SyncSettingsMapper {
         let canonical: String
         let iosKey: String
         let type: ValueType
+
+        init(_ canonical: String, _ iosKey: String, _ type: ValueType) {
+            self.canonical = canonical
+            self.iosKey = iosKey
+            self.type = type
+        }
     }
 
     static let whitelist: [Entry] = [
